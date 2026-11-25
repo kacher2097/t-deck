@@ -1,0 +1,57 @@
+# Environment & local secrets
+.env
+.env.*
+!.env.example
+settings.json
+settings.json.*
+
+# T-Deck local runtime state, anchor & databases
+.tdeck-data/
+.tdeck-meta.json
+thumbnails/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Wails & Go build artifacts
+build/bin/
+build/windows/installer/*.exe
+frontend/package.json.md5
+frontend/wailsjs/
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+*.syso
+coverage.*
+
+# Frontend / Node / Vite
+node_modules/
+frontend/dist/
+frontend/dist-ssr/
+.vite/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor, AI workspace & OS artifacts
+.gemini/
+.codegraph/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.log
+*.tmp
+*.bak
+*.orig
+.DS_Store
+Thumbs.db
+desktop.ini

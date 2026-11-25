@@ -1,0 +1,108 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background-color: #0D0E11;
+  color: #F3F4F6;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2A303C #0D0E11;
+}
+
+*::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #0D0E11;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: #2A303C;
+  border-radius: 4px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: #3A4252;
+}
+
+/* Smooth GPU-composited root entrance without frame flash */
+@keyframes appFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.app-enter {
+  animation: appFadeIn 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Native <dialog> smooth open/close transitions (Chromium/WebView2 Baseline) */
+dialog.tdeck-dialog {
+  opacity: 0;
+  transform: translateY(6px) scale(0.985);
+  transition:
+    opacity 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    overlay 160ms allow-discrete,
+    display 160ms allow-discrete;
+}
+
+dialog.tdeck-dialog[open] {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+@starting-style {
+  dialog.tdeck-dialog[open] {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+}
+
+dialog.tdeck-dialog::backdrop {
+  background: rgba(5, 6, 8, 0);
+  transition:
+    background-color 160ms ease-out,
+    overlay 160ms allow-discrete,
+    display 160ms allow-discrete;
+}
+
+dialog.tdeck-dialog[open]::backdrop {
+  background: rgba(5, 6, 8, 0.76);
+}
+
+@starting-style {
+  dialog.tdeck-dialog[open]::backdrop {
+    background: rgba(5, 6, 8, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-enter,
+  dialog.tdeck-dialog,
+  dialog.tdeck-dialog::backdrop {
+    animation: none;
+    transition: none;
+    transform: none;
+  }
+}
