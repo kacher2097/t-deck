@@ -225,19 +225,28 @@ func (a *App) DeleteProject(id string, deleteLocalFiles bool) (err error) {
 	if err != nil {
 		return err
 	}
+
+	if a.procMonitor != nil {
+		_ = a.procMonitor.StopProject(id)
+	}
+
+	localDir := strings.TrimSpace(view.LocalDir)
+	if deleteLocalFiles && localDir != "" && fsutil.DirExists(localDir) {
+		if !a.isSafeProjectDeleteTarget(localDir) {
+			return apperr.Validation("từ chối xóa thư mục gốc hệ thống hoặc thư mục workspace: " + localDir)
+		}
+		// Remove local files BEFORE committing DB soft-delete so a locked folder never ghosts out of T-Deck with leftover files.
+		if err := fsutil.RemoveDirForce(localDir); err != nil {
+			return apperr.IO("xóa thư mục cục bộ thất bại (dự án vẫn được giữ lại trong T-Deck để thử lại)", err)
+		}
+	}
+
 	if err := a.repo.DeleteProject(id); err != nil {
 		return err
 	}
 	_ = os.Remove(a.settingsMgr.ThumbnailPath(id))
-	localDir := strings.TrimSpace(view.LocalDir)
-	if deleteLocalFiles && localDir != "" && fsutil.DirExists(localDir) {
-		if !isSafeDeleteTarget(localDir) {
-			return apperr.Validation("từ chối xóa thư mục gốc hệ thống: " + localDir)
-		}
-		if err := os.RemoveAll(localDir); err != nil {
-			return apperr.IO("đã gỡ khỏi T-Deck nhưng xóa thư mục cục bộ thất bại", err)
-		}
-	} else if !deleteLocalFiles && localDir != "" && fsutil.DirExists(localDir) {
+
+	if !deleteLocalFiles && localDir != "" && fsutil.DirExists(localDir) {
 		// Preserve/ensure anchor so Scan Local honors the tombstone and never resurrects this project.
 		if !fsutil.FileExists(filepath.Join(localDir, config.MetaFileName)) {
 			_ = scanner.WriteMetaFile(localDir, model.ProjectMeta{
@@ -247,6 +256,8 @@ func (a *App) DeleteProject(id string, deleteLocalFiles bool) (err error) {
 			})
 		}
 	}
+
+	go a.deleteRemoteThumbnailBestEffort(id)
 	return nil
 }
 
@@ -262,7 +273,6 @@ func (a *App) DeleteProjects(ids []string, deleteLocalFiles bool) (res model.Bul
 	}
 
 	views := make([]model.ProjectView, 0, len(ids))
-	validIDs := make([]string, 0, len(ids))
 	for _, rawID := range ids {
 		id := strings.TrimSpace(rawID)
 		if id == "" {
@@ -274,41 +284,92 @@ func (a *App) DeleteProjects(ids []string, deleteLocalFiles bool) (res model.Bul
 			continue
 		}
 		views = append(views, v)
-		validIDs = append(validIDs, v.ID)
 	}
-	if len(validIDs) == 0 {
+	if len(views) == 0 {
 		return res, nil
 	}
 
-	deleted, err := a.repo.DeleteProjects(validIDs)
+	readyIDs := make([]string, 0, len(views))
+	readyViews := make([]model.ProjectView, 0, len(views))
+
+	for _, v := range views {
+		if a.procMonitor != nil {
+			_ = a.procMonitor.StopProject(v.ID)
+		}
+		localDir := strings.TrimSpace(v.LocalDir)
+		if deleteLocalFiles && localDir != "" && fsutil.DirExists(localDir) {
+			if !a.isSafeProjectDeleteTarget(localDir) {
+				res.Failed = append(res.Failed, fmt.Sprintf("%s: từ chối xóa thư mục gốc/workspace %s", v.Name, localDir))
+				continue
+			}
+			if rmErr := fsutil.RemoveDirForce(localDir); rmErr != nil {
+				res.Failed = append(res.Failed, fmt.Sprintf("%s: %v", v.Name, rmErr))
+				continue
+			}
+		}
+		readyIDs = append(readyIDs, v.ID)
+		readyViews = append(readyViews, v)
+	}
+	if len(readyIDs) == 0 {
+		return res, nil
+	}
+
+	deleted, err := a.repo.DeleteProjects(readyIDs)
 	if err != nil {
 		return res, apperr.Wrap(apperr.CodeInternal, "xóa hàng loạt dự án thất bại", err)
 	}
 	res.Deleted = deleted
 
-	for _, v := range views {
+	for _, v := range readyViews {
 		_ = os.Remove(a.settingsMgr.ThumbnailPath(v.ID))
 		localDir := strings.TrimSpace(v.LocalDir)
-		if localDir == "" || !fsutil.DirExists(localDir) {
-			continue
-		}
-		if deleteLocalFiles {
-			if !isSafeDeleteTarget(localDir) {
-				res.Failed = append(res.Failed, fmt.Sprintf("%s: từ chối xóa thư mục gốc %s", v.Name, localDir))
-				continue
+		if !deleteLocalFiles && localDir != "" && fsutil.DirExists(localDir) {
+			if !fsutil.FileExists(filepath.Join(localDir, config.MetaFileName)) {
+				_ = scanner.WriteMetaFile(localDir, model.ProjectMeta{
+					ProjectID: v.ID,
+					Slug:      v.Slug,
+					Type:      v.Type,
+				})
 			}
-			if rmErr := os.RemoveAll(localDir); rmErr != nil {
-				res.Failed = append(res.Failed, fmt.Sprintf("%s: %v", v.Name, rmErr))
-			}
-		} else if !fsutil.FileExists(filepath.Join(localDir, config.MetaFileName)) {
-			_ = scanner.WriteMetaFile(localDir, model.ProjectMeta{
-				ProjectID: v.ID,
-				Slug:      v.Slug,
-				Type:      v.Type,
-			})
 		}
+		go a.deleteRemoteThumbnailBestEffort(v.ID)
 	}
 	return res, nil
+}
+
+func (a *App) deleteRemoteThumbnailBestEffort(projectID string) {
+	defer apperr.Recover("delete-remote-thumbnail", nil, a.logPanic)
+	if a.settingsMgr == nil || strings.TrimSpace(projectID) == "" {
+		return
+	}
+	settings, store, err := a.loadR2Store()
+	if err != nil || !settings.R2.Enabled || store == nil {
+		return
+	}
+	_ = store.DeleteObject(a.opContext(), config.ThumbnailsPrefix+projectID+".png")
+}
+
+func (a *App) isSafeProjectDeleteTarget(dir string) bool {
+	if !isSafeDeleteTarget(dir) {
+		return false
+	}
+	if a.settingsMgr == nil {
+		return true
+	}
+	settings, err := a.settingsMgr.Load()
+	if err != nil {
+		return true
+	}
+	cleaned := filepath.Clean(strings.TrimSpace(dir))
+	for _, ws := range settings.WorkspaceDirs {
+		if wsClean := filepath.Clean(strings.TrimSpace(ws)); wsClean != "" && strings.EqualFold(cleaned, wsClean) {
+			return false
+		}
+	}
+	if appsClean := filepath.Clean(strings.TrimSpace(settings.AppsDir)); appsClean != "" && strings.EqualFold(cleaned, appsClean) {
+		return false
+	}
+	return true
 }
 
 func isSafeDeleteTarget(dir string) bool {

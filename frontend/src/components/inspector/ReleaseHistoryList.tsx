@@ -1,5 +1,6 @@
 import { Check, Download, Link2, Loader2, Trash2 } from "lucide-react";
 import type { Release } from "../../types/project";
+import { ConfirmPopover } from "../ui/ConfirmPopover";
 import { UI_CARD_BOX, UI_SECTION_TITLE_CLS } from "../ui/uiTokens";
 
 interface ReleaseHistoryListProps {
@@ -88,14 +89,33 @@ export function ReleaseHistoryList({
                       )}
                     </button>
                   )}
-                  <button
-                    type="button"
-                    title="Xóa release"
-                    onClick={() => onDeleteRelease(rel)}
-                    className="p-1 text-muted hover:text-status-danger"
+                  <ConfirmPopover
+                    title={`Xóa bản phát hành ${rel.version}?`}
+                    description={
+                      rel.r2_key
+                        ? "Bản ghi và tệp đóng gói trên R2 sẽ bị xóa."
+                        : "Bản ghi phát hành này sẽ bị xóa khỏi lịch sử."
+                    }
+                    confirmLabel="Xóa release"
+                    onConfirm={() => onDeleteRelease(rel)}
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                    {({ open, toggle }) => (
+                      <button
+                        type="button"
+                        onClick={toggle}
+                        title="Xóa release"
+                        aria-label={`Xóa release ${rel.version}`}
+                        aria-expanded={open}
+                        className={`p-1 rounded transition-colors ${
+                          open
+                            ? "text-status-danger bg-status-danger/10"
+                            : "text-muted hover:text-status-danger"
+                        }`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </ConfirmPopover>
                 </div>
               </div>
               {rel.sha256 && (

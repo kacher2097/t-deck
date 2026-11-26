@@ -1,6 +1,6 @@
 import { X } from "lucide-react";
 import type React from "react";
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 
 interface ModalDialogProps {
   open: boolean;
@@ -22,6 +22,19 @@ const SIZE_CLASSES: Record<NonNullable<ModalDialogProps["size"]>, string> = {
   "2xl": "w-[1260px] max-w-[93vw]",
 };
 
+function isPointerOutsideDialog(
+  e: React.PointerEvent<HTMLDialogElement>,
+  dialog: HTMLDialogElement
+): boolean {
+  const r = dialog.getBoundingClientRect();
+  return (
+    e.clientX < r.left ||
+    e.clientX > r.right ||
+    e.clientY < r.top ||
+    e.clientY > r.bottom
+  );
+}
+
 export function ModalDialog({
   open,
   onClose,
@@ -34,6 +47,8 @@ export function ModalDialog({
   children,
 }: ModalDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const pressedOutsideRef = useRef(false);
+  const titleId = useId();
 
   useEffect(() => {
     const dlg = dialogRef.current;
@@ -48,15 +63,27 @@ export function ModalDialog({
   return (
     <dialog
       ref={dialogRef}
+      aria-labelledby={titleId}
       onClose={onClose}
-      onClick={(e) => {
-        if (e.target === dialogRef.current) onClose();
+      onPointerDown={(e) => {
+        const dlg = dialogRef.current;
+        pressedOutsideRef.current = dlg ? isPointerOutsideDialog(e, dlg) : false;
+      }}
+      onPointerUp={(e) => {
+        const dlg = dialogRef.current;
+        const wasOutside = pressedOutsideRef.current;
+        pressedOutsideRef.current = false;
+        if (wasOutside && dlg && isPointerOutsideDialog(e, dlg)) {
+          onClose();
+        }
       }}
       className={`tdeck-dialog ${SIZE_CLASSES[size]} ${fixedHeight ? "h-[780px] max-h-[88vh]" : "max-h-[88vh]"} rounded-lg bg-surface border border-edge text-primary p-0 shadow-none overflow-hidden open:flex open:flex-col`}
     >
       <div className="px-7 py-4 border-b border-edge flex items-center justify-between gap-4 shrink-0">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2.5 flex-wrap">{title}</div>
+          <div id={titleId} className="flex items-center gap-2.5 flex-wrap">
+            {title}
+          </div>
           {subtitle && (
             <div className="text-xs text-muted mt-0.5 truncate">{subtitle}</div>
           )}

@@ -2,6 +2,7 @@ import { Globe, Laptop, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api, formatError } from "../../lib/api";
 import type { ProjectTarget, ProjectView } from "../../types/project";
+import { ConfirmPopover } from "../ui/ConfirmPopover";
 import {
   UI_BTN_PRIMARY,
   UI_BTN_SECONDARY,
@@ -150,14 +151,29 @@ export function TargetListEditor({
                   </div>
                 </div>
               </button>
-              <button
-                type="button"
-                onClick={() => handleDeleteTarget(t)}
-                title="Xóa target"
-                className="p-1 text-muted hover:text-status-danger"
+              <ConfirmPopover
+                title={`Xóa target "${t.name}"?`}
+                description="Cấu hình target phát hành này sẽ bị gỡ khỏi dự án."
+                confirmLabel="Xóa target"
+                onConfirm={() => handleDeleteTarget(t)}
               >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
+                {({ open, toggle }) => (
+                  <button
+                    type="button"
+                    onClick={toggle}
+                    title="Xóa target"
+                    aria-label={`Xóa target ${t.name}`}
+                    aria-expanded={open}
+                    className={`p-1 rounded transition-colors ${
+                      open
+                        ? "text-status-danger bg-status-danger/10"
+                        : "text-muted hover:text-status-danger"
+                    }`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </ConfirmPopover>
             </div>
           ))}
         </div>

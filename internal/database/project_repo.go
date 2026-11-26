@@ -555,6 +555,12 @@ func (r *ProjectRepo) DeleteProjects(ids []string) (int, error) {
 		if _, err := tx.Exec(`DELETE FROM local_state WHERE project_id = ?`, id); err != nil {
 			return 0, err
 		}
+		if _, err := tx.Exec(`UPDATE project_targets SET deleted_at = ?, updated_at = ? WHERE project_id = ? AND COALESCE(deleted_at, 0) = 0`, now, now, id); err != nil {
+			return 0, err
+		}
+		if _, err := tx.Exec(`UPDATE releases SET deleted_at = ?, status = 'yanked' WHERE project_id = ? AND COALESCE(deleted_at, 0) = 0`, now, id); err != nil {
+			return 0, err
+		}
 		res, err := tx.Exec(`UPDATE projects SET deleted_at = ?, updated_at = ? WHERE id = ? AND COALESCE(deleted_at, 0) = 0`, now, now, id)
 		if err != nil {
 			return 0, err
@@ -589,6 +595,12 @@ func (r *ProjectRepo) SoftDeleteProjectAt(id string, deletedAt int64) error {
 	if _, err := tx.Exec(`DELETE FROM local_state WHERE project_id = ?`, id); err != nil {
 		return err
 	}
+	if _, err := tx.Exec(`UPDATE project_targets SET deleted_at = ?, updated_at = ? WHERE project_id = ? AND COALESCE(deleted_at, 0) = 0`, deletedAt, deletedAt, id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`UPDATE releases SET deleted_at = ?, status = 'yanked' WHERE project_id = ? AND COALESCE(deleted_at, 0) = 0`, deletedAt, id); err != nil {
+		return err
+	}
 	if _, err := tx.Exec(`UPDATE projects SET deleted_at = ?, updated_at = ? WHERE id = ?`, deletedAt, deletedAt, id); err != nil {
 		return err
 	}
@@ -607,6 +619,12 @@ func (r *ProjectRepo) PurgeExpiredTombstones(cutoffUnix int64) error {
 	}
 	defer tx.Rollback()
 
+	if _, err := tx.Exec(`DELETE FROM releases WHERE deleted_at > 0 AND deleted_at < ?`, cutoffUnix); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM project_targets WHERE deleted_at > 0 AND deleted_at < ?`, cutoffUnix); err != nil {
+		return err
+	}
 	if _, err := tx.Exec(`DELETE FROM projects WHERE deleted_at > 0 AND deleted_at < ?`, cutoffUnix); err != nil {
 		return err
 	}

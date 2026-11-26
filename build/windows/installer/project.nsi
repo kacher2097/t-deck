@@ -32,6 +32,13 @@ Unicode true
 ####
 ## Include the wails tools
 ####
+!define INFO_PROJECTNAME    "TDeck"
+!define INFO_COMPANYNAME    "T-Hub"
+!define INFO_PRODUCTNAME    "T-Deck"
+!define PRODUCT_EXECUTABLE  "TDeck.exe"
+!define REQUEST_EXECUTION_LEVEL "user"
+!define WAILS_INSTALL_SCOPE "user"
+
 !include "wails_tools.nsh"
 
 # The version information for this two must consist of 4 parts
@@ -60,6 +67,11 @@ ManifestDPIAware true
 # !insertmacro MUI_PAGE_LICENSE "resources\eula.txt" # Adds a EULA page to the installer
 !insertmacro MUI_PAGE_DIRECTORY # In which folder install page.
 !insertmacro MUI_PAGE_INSTFILES # Installing page.
+!define MUI_FINISHPAGE_RUN "$INSTDIR\${PRODUCT_EXECUTABLE}"
+!define MUI_FINISHPAGE_RUN_TEXT "Khởi chạy T-Deck ngay"
+!define MUI_FINISHPAGE_SHOWREADME "desktop_shortcut"
+!define MUI_FINISHPAGE_SHOWREADME_TEXT "Đưa biểu tượng T-Deck ra màn hình chính (Desktop)"
+!define MUI_FINISHPAGE_SHOWREADME_FUNCTION CreateDesktopShortcut
 !insertmacro MUI_PAGE_FINISH # Finished installation page.
 
 !insertmacro MUI_UNPAGE_INSTFILES # Uinstalling page
@@ -87,8 +99,16 @@ Function .onInit
    !insertmacro wails.checkArchitecture
 FunctionEnd
 
+Function CreateDesktopShortcut
+   !insertmacro wails.setShellContext
+   CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}" "" "$INSTDIR\${PRODUCT_EXECUTABLE}" 0
+FunctionEnd
+
 Section
     !insertmacro wails.setShellContext
+
+    ; Stop running TDeck.exe before upgrading files; %APPDATA%\TDeck (DB/settings/thumbnails) is preserved intact.
+    nsExec::ExecToLog 'taskkill /IM ${PRODUCT_EXECUTABLE} /F'
 
     !insertmacro wails.webview2runtime
 
@@ -96,8 +116,9 @@ Section
 
     !insertmacro wails.files
 
-    CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
-    CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
+    CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}" "" "$INSTDIR\${PRODUCT_EXECUTABLE}" 0
+    IfSilent 0 +2
+        CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}" "" "$INSTDIR\${PRODUCT_EXECUTABLE}" 0
 
     !insertmacro wails.associateFiles
     !insertmacro wails.associateCustomProtocols

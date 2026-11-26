@@ -222,3 +222,84 @@ func TestInspectLocalDirectoryAndAutoFillUpsert(t *testing.T) {
 		t.Fatalf("expected auto-generated thumbnail on new project, got ts=%d url=%q", created.ThumbnailUpdatedAt, created.ThumbnailURL)
 	}
 }
+
+func TestDeleteProjectThoroughCleanupAndLockSafety(t *testing.T) {
+	tmp := t.TempDir()
+	mgr, err := config.NewSettingsManager(filepath.Join(tmp, "appdata"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ws := filepath.Join(tmp, "workspace")
+	if _, err := mgr.Save(config.Settings{WorkspaceDirs: []string{ws}}); err != nil {
+		t.Fatal(err)
+	}
+
+	app := &App{settingsMgr: mgr}
+	if err := app.initServices(); err != nil {
+		t.Fatal(err)
+	}
+	defer app.shutdown(nil)
+
+	projDir := filepath.Join(ws, "heavy-app")
+	gitPack := filepath.Join(projDir, ".git", "objects", "pack")
+	if err := os.MkdirAll(gitPack, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	roFile := filepath.Join(gitPack, "pack-abc.idx")
+	if err := os.WriteFile(roFile, []byte("idx"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.Chmod(roFile, 0o444)
+
+	created, err := app.UpsertProject(model.ProjectInput{
+		Name:     "Heavy App",
+		Type:     config.ProjectTypeWeb,
+		LocalDir: projDir,
+		ProdURL:  "https://heavy.example.com",
+	})
+	if err != nil {
+		t.Fatalf("UpsertProject failed: %v", err)
+	}
+
+	// Add a release row to verify cascading soft-delete of targets & releases.
+	targets, err := app.repo.ListProjectTargets(created.ID)
+	if err != nil || len(targets) == 0 {
+		t.Fatalf("expected initial target, got %v err=%v", targets, err)
+	}
+	if _, err := app.repo.UpsertRelease(model.Release{
+		ProjectID: created.ID,
+		TargetID:  targets[0].ID,
+		Version:   "v1.0.0",
+		Status:    "published",
+	}); err != nil {
+		t.Fatalf("UpsertRelease failed: %v", err)
+	}
+
+	// Delete with deleteLocalFiles=true must remove dir, thumbnail, targets, and releases thoroughly.
+	if err := app.DeleteProject(created.ID, true); err != nil {
+		t.Fatalf("DeleteProject failed: %v", err)
+	}
+	if _, statErr := os.Lstat(projDir); !os.IsNotExist(statErr) {
+		t.Fatalf("expected project directory %s completely deleted, err=%v", projDir, statErr)
+	}
+	if _, statErr := os.Stat(mgr.ThumbnailPath(created.ID)); !os.IsNotExist(statErr) {
+		t.Fatalf("expected local thumbnail removed, err=%v", statErr)
+	}
+	if _, getErr := app.GetProjectDetail(created.ID); getErr == nil {
+		t.Fatalf("expected deleted project to be hidden from GetProjectDetail")
+	}
+	if isDel, delErr := app.repo.IsProjectDeleted(created.ID); delErr != nil || !isDel {
+		t.Fatalf("expected tombstone IsProjectDeleted=true, got %v err=%v", isDel, delErr)
+	}
+	if remTargets, err := app.repo.ListProjectTargets(created.ID); err != nil || len(remTargets) != 0 {
+		t.Fatalf("expected 0 active targets after delete, got %d err=%v", len(remTargets), err)
+	}
+	if remRels, err := app.repo.ListReleases(created.ID, ""); err != nil || len(remRels) != 0 {
+		t.Fatalf("expected 0 active releases after delete, got %d err=%v", len(remRels), err)
+	}
+
+	// Workspace root itself must be protected from deletion.
+	if app.isSafeProjectDeleteTarget(ws) {
+		t.Fatalf("expected workspace root %s to be rejected by isSafeProjectDeleteTarget", ws)
+	}
+}

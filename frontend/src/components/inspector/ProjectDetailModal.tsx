@@ -10,7 +10,7 @@ interface ProjectDetailModalProps {
   categories: Category[];
   onClose: () => void;
   onUpdated: (updated: ProjectView) => void;
-  onDeleted: (projectId: string) => void;
+  onRequestDelete: (project: ProjectView) => void;
   onCreateCategory: (name: string) => Promise<Category | null>;
   onNotify: (kind: "success" | "error" | "warn", msg: string) => void;
 }
@@ -41,7 +41,7 @@ export function ProjectDetailModal({
   categories,
   onClose,
   onUpdated,
-  onDeleted,
+  onRequestDelete,
   onCreateCategory,
   onNotify,
 }: ProjectDetailModalProps) {
@@ -117,7 +117,7 @@ export function ProjectDetailModal({
               project={project}
               categories={categories}
               onUpdated={onUpdated}
-              onDeleted={onDeleted}
+              onRequestDelete={onRequestDelete}
               onCreateCategory={onCreateCategory}
               onNotify={onNotify}
             />

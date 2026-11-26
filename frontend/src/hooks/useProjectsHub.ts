@@ -387,7 +387,12 @@ export function useProjectsHub({
         if (targets.length === 1) {
           await api.deleteProject(targets[0].id, deleteLocalFiles);
           await refreshAll();
-          notify("success", `Đã xóa "${targets[0].name}".`);
+          notify(
+            "success",
+            deleteLocalFiles
+              ? `Đã xóa vĩnh viễn "${targets[0].name}" và toàn bộ thư mục cục bộ.`
+              : `Đã gỡ "${targets[0].name}" khỏi danh sách T-Deck.`
+          );
         } else {
           const ids = targets.map((p) => p.id);
           const res = await api.deleteProjects(ids, deleteLocalFiles);
@@ -398,11 +403,17 @@ export function useProjectsHub({
               `Đã xóa ${res.deleted}/${targets.length} dự án (${res.failed.length} lỗi: ${res.failed[0]}).`
             );
           } else {
-            notify("success", `Đã xóa ${res.deleted} dự án.`);
+            notify(
+              "success",
+              deleteLocalFiles
+                ? `Đã xóa vĩnh viễn ${res.deleted} dự án và toàn bộ thư mục cục bộ.`
+                : `Đã gỡ ${res.deleted} dự án khỏi danh sách T-Deck.`
+            );
           }
         }
         return true;
       } catch (err) {
+        await refreshAll();
         notify("error", formatError(err));
         return false;
       } finally {

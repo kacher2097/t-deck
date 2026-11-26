@@ -9,5 +9,12 @@
   "author": {
     "name": "kacher2097",
     "email": "ltuan997bg@gmail.com"
+  },
+  "info": {
+    "companyName": "T-Hub",
+    "productName": "T-Deck",
+    "productVersion": "1.0.0",
+    "copyright": "Copyright (c) 2026 T-Hub",
+    "comments": "Local & Cloud Application Hub"
   }
 }

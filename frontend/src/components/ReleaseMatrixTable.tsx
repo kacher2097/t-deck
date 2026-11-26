@@ -1,11 +1,12 @@
 import {
+  AlertTriangle,
   Check,
   Code2,
   Download,
-  ExternalLink,
   FolderOpen,
   Globe,
   Link2,
+  Loader2,
   Play,
   RefreshCw,
   SlidersHorizontal,
@@ -22,6 +23,7 @@ interface ReleaseMatrixTableProps {
   projects: ProjectView[];
   healthMap: Record<string, WebHealthResult>;
   runningMap: Record<string, RunningProcess>;
+  busyAction?: string | null;
   selectionMode?: boolean;
   selectedIds?: Set<string>;
   onToggleSelect?: (p: ProjectView) => void;
@@ -32,16 +34,44 @@ interface ReleaseMatrixTableProps {
   onHydrate: (p: ProjectView) => void;
   onUpdateDesktop: (p: ProjectView) => void;
   onOpenLive: (p: ProjectView) => void;
+  onOpenLocalPort?: (port: number) => void;
   onStopProcess: (p: ProjectView) => void;
   onCopyReleaseLink: (releaseId: string) => void;
   onOpenExplorer: (p: ProjectView) => void;
   onOpenVSCode: (p: ProjectView) => void;
 }
 
+const STATUS_PILL_META: Record<
+  ProjectView["status"],
+  { label: string; dotClass: string; textClass: string }
+> = {
+  ready: {
+    label: "READY",
+    dotClass: "bg-status-ready",
+    textClass: "text-status-ready",
+  },
+  missing_env: {
+    label: "MISSING .ENV",
+    dotClass: "bg-status-warn",
+    textClass: "text-status-warn",
+  },
+  cloud_only: {
+    label: "CLOUD ONLY",
+    dotClass: "bg-status-cloud",
+    textClass: "text-muted",
+  },
+  missing_dir: {
+    label: "MISSING DIR",
+    dotClass: "bg-status-danger",
+    textClass: "text-status-danger",
+  },
+};
+
 export function ReleaseMatrixTable({
   projects,
   healthMap,
   runningMap,
+  busyAction = null,
   selectionMode = false,
   selectedIds,
   onToggleSelect,
@@ -52,6 +82,7 @@ export function ReleaseMatrixTable({
   onHydrate,
   onUpdateDesktop,
   onOpenLive,
+  onOpenLocalPort,
   onStopProcess,
   onCopyReleaseLink,
   onOpenExplorer,
@@ -63,12 +94,17 @@ export function ReleaseMatrixTable({
     projects.every((p) => selectedIds?.has(p.id));
 
   return (
-    <div className="rounded-md border border-edge bg-surface overflow-x-auto">
-      <table className="w-full text-left border-collapse">
-        <thead>
-          <tr className="border-b border-edge bg-canvas/70 text-[11px] font-semibold uppercase tracking-wider text-muted">
+    <div
+      tabIndex={0}
+      role="region"
+      aria-label="Bảng danh sách dự án"
+      className="rounded-md border border-edge bg-surface overflow-x-auto focus:outline-none focus:ring-1 focus:ring-accent/50"
+    >
+      <table className="w-full text-left border-separate border-spacing-0">
+        <thead className="sticky top-0 z-20 bg-canvas">
+          <tr className="text-[11px] font-semibold uppercase tracking-wider text-muted">
             {selectionMode && onToggleSelectAll && (
-              <th className="py-2.5 pl-3.5 pr-1 w-9">
+              <th className="py-2.5 pl-3.5 pr-1 w-9 border-b border-edge bg-canvas">
                 <button
                   type="button"
                   onClick={onToggleSelectAll}
@@ -83,27 +119,124 @@ export function ReleaseMatrixTable({
                 </button>
               </th>
             )}
-            <th className="py-2.5 px-3.5">Project</th>
-            <th className="py-2.5 px-3">Web Live</th>
-            <th className="py-2.5 px-3">Desktop (R2 / Máy)</th>
-            <th className="py-2.5 px-3">Local &amp; Git</th>
-            <th className="py-2.5 px-3.5 text-right">Thao tác</th>
+            <th className="py-2.5 px-3.5 border-b border-edge bg-canvas">
+              Dự án
+            </th>
+            <th className="py-2.5 px-3 border-b border-edge bg-canvas">
+              Trạng thái &amp; Git
+            </th>
+            <th className="py-2.5 px-3 border-b border-edge bg-canvas">
+              Phát hành &amp; Live
+            </th>
+            <th className="sticky right-0 z-30 py-2.5 pl-3 pr-3.5 text-right border-b border-l border-edge bg-canvas">
+              Thao tác
+            </th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-edge text-[13px]">
+        <tbody className="text-[13px]">
           {projects.map((p) => {
             const webTarget = (p.targets || []).find((t) => t.kind === "web");
             const deskTarget = (p.targets || []).find(
               (t) => t.kind === "desktop"
             );
-            const webRel = webTarget ? p.latest_releases?.[webTarget.id] : undefined;
+            const webRel = webTarget
+              ? p.latest_releases?.[webTarget.id]
+              : undefined;
             const deskRel = deskTarget
               ? p.latest_releases?.[deskTarget.id]
               : undefined;
             const webHealth = webTarget ? healthMap[webTarget.id] : undefined;
             const running = runningMap[p.id];
+            const isRunning = Boolean(running && running.pid > 0);
             const firstPort = running?.ports?.[0];
             const isSelected = Boolean(selectedIds?.has(p.id));
+            const isBusy = busyAction === p.id;
+            const statusMeta = STATUS_PILL_META[p.status] ?? STATUS_PILL_META.ready;
+
+            const rowBg = isSelected
+              ? "bg-elevated"
+              : "bg-surface group-hover:bg-elevated";
+
+            const renderPrimaryButton = () => {
+              if (p.status === "cloud_only") {
+                return (
+                  <button
+                    type="button"
+                    disabled={isBusy}
+                    onClick={() => onHydrate(p)}
+                    title={
+                      p.type === "desktop"
+                        ? "Install về máy"
+                        : "Clone về máy"
+                    }
+                    className="h-8 px-3 shrink-0 whitespace-nowrap rounded-md bg-accent hover:bg-white text-canvas text-xs font-semibold inline-flex items-center gap-1.5 disabled:opacity-50 active:scale-[0.98] transition-[background-color,transform] duration-150"
+                  >
+                    {isBusy ? (
+                      <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />
+                    ) : (
+                      <Download className="w-3.5 h-3.5 shrink-0" />
+                    )}
+                    <span>{p.type === "desktop" ? "Install" : "Clone"}</span>
+                  </button>
+                );
+              }
+
+              if (p.status === "missing_env") {
+                return (
+                  <button
+                    type="button"
+                    disabled={isBusy}
+                    onClick={() => onLaunch(p)}
+                    title="Khởi tạo / cấu hình .env"
+                    className="h-8 px-2.5 shrink-0 whitespace-nowrap rounded-md border border-status-warn/60 bg-status-warn/15 hover:bg-status-warn/25 text-status-warn text-xs font-medium inline-flex items-center gap-1.5 disabled:opacity-50 transition-colors"
+                  >
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    <span>Cấu hình .env</span>
+                  </button>
+                );
+              }
+
+              if (p.status === "missing_dir") {
+                return (
+                  <button
+                    type="button"
+                    onClick={() => onSelect(p)}
+                    title="Thư mục cục bộ không tồn tại — mở chi tiết để cập nhật"
+                    className="h-8 px-2.5 shrink-0 whitespace-nowrap rounded-md border border-status-danger/60 bg-status-danger/10 hover:bg-status-danger/20 text-status-danger text-xs font-medium inline-flex items-center gap-1.5 transition-colors"
+                  >
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    <span>Kiểm tra thư mục</span>
+                  </button>
+                );
+              }
+
+              return (
+                <button
+                  type="button"
+                  disabled={isBusy}
+                  onClick={() => onLaunch(p)}
+                  title="Khởi chạy"
+                  className="h-8 px-3 shrink-0 whitespace-nowrap rounded-md bg-accent hover:bg-white text-canvas text-xs font-semibold inline-flex items-center gap-1.5 disabled:opacity-50 active:scale-[0.98] transition-[background-color,transform] duration-150"
+                >
+                  {isBusy ? (
+                    <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />
+                  ) : (
+                    <Play className="w-3.5 h-3.5 shrink-0 fill-current" />
+                  )}
+                  <span>{p.type === "web" ? "Run .bat" : "Launch"}</span>
+                </button>
+              );
+            };
+
+            const hasWebTarget = Boolean(webTarget || p.live_url);
+            const hasDeskInfo = Boolean(
+              deskTarget ||
+                p.type !== "web" ||
+                deskRel ||
+                p.latest_version ||
+                p.installed_version ||
+                p.has_update
+            );
 
             return (
               <tr
@@ -113,15 +246,11 @@ export function ReleaseMatrixTable({
                     ? onToggleSelect(p)
                     : onSelect(p)
                 }
-                className={`cursor-pointer transition-colors ${
-                  isSelected
-                    ? "bg-elevated/80"
-                    : "hover:bg-elevated/60"
-                }`}
+                className={`group cursor-pointer transition-colors ${rowBg}`}
               >
                 {selectionMode && onToggleSelect && (
                   <td
-                    className="py-2.5 pl-3.5 pr-1 w-9"
+                    className={`py-2.5 pl-3.5 pr-1 w-9 border-b border-edge transition-colors ${rowBg}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       onToggleSelect(p);
@@ -140,12 +269,18 @@ export function ReleaseMatrixTable({
                     </button>
                   </td>
                 )}
-                <td className="py-2.5 px-3.5 min-w-[230px]">
-                  <div className="flex items-center gap-2.5">
+
+                {/* 1. Dự án */}
+                <td
+                  className={`py-2.5 px-3.5 min-w-[210px] max-w-[310px] border-b border-edge transition-colors ${rowBg}`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
                     {p.thumbnail_url ? (
                       <img
                         src={p.thumbnail_url}
                         alt={p.name}
+                        loading="lazy"
+                        decoding="async"
                         className="w-12 h-7 rounded object-cover border border-edge shrink-0 bg-canvas"
                       />
                     ) : (
@@ -153,9 +288,14 @@ export function ReleaseMatrixTable({
                         {p.type.toUpperCase()}
                       </div>
                     )}
-                    <div className="min-w-0">
-                      <div className="font-medium text-primary truncate flex items-center gap-1.5">
-                        <span className="truncate">{p.name}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span
+                          title={p.name}
+                          className="font-semibold text-primary truncate"
+                        >
+                          {p.name}
+                        </span>
                         <span className="px-1.5 py-0.2 rounded bg-canvas border border-edge text-[10px] font-mono text-muted shrink-0">
                           {p.type === "hybrid"
                             ? "HYBRID"
@@ -163,6 +303,11 @@ export function ReleaseMatrixTable({
                             ? "WEB"
                             : "EXE"}
                         </span>
+                        {p.has_update && (
+                          <span className="px-1.5 py-0.2 rounded bg-status-warn/15 border border-status-warn/50 text-[10px] font-mono font-semibold text-status-warn shrink-0">
+                            UPDATE
+                          </span>
+                        )}
                       </div>
                       <div className="text-[11px] text-muted truncate">
                         {p.category || "Chưa phân nhóm"}
@@ -171,93 +316,38 @@ export function ReleaseMatrixTable({
                   </div>
                 </td>
 
-                {/* Web Live */}
-                <td className="py-2.5 px-3 min-w-[180px]">
-                  {webTarget ? (
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-1.5">
-                        {webHealth ? (
-                          <span
-                            className={`text-[11px] font-mono font-semibold ${
-                              webHealth.online
-                                ? webHealth.drift
-                                  ? "text-status-warn"
-                                  : "text-status-ready"
-                                : "text-status-danger"
-                            }`}
-                          >
-                            {webHealth.online
-                              ? `ON ${webHealth.latency_ms}ms`
-                              : "OFFLINE"}
-                          </span>
-                        ) : (
-                          <span className="text-[11px] font-mono text-muted">
-                            {webRel?.version || (p.live_url ? "URL ready" : "-")}
-                          </span>
-                        )}
-                        {webHealth?.live_version && (
-                          <span className="text-[11px] font-mono text-primary">
-                            {webHealth.live_version}
-                          </span>
-                        )}
-                      </div>
-                      {p.live_url && (
-                        <div className="text-[11px] font-mono text-muted truncate max-w-[200px]">
-                          {p.live_url.replace(/^https?:\/\//, "")}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <span className="text-xs text-muted/60">-</span>
-                  )}
-                </td>
-
-                {/* Desktop Release */}
-                <td className="py-2.5 px-3 min-w-[170px]">
-                  {deskTarget || p.type !== "web" ? (
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-1.5 font-mono text-xs">
-                        <span className="text-primary font-semibold">
-                          {deskRel?.version || p.latest_version || "-"}
-                        </span>
-                        {p.installed_version && (
-                          <span
-                            className={
-                              p.has_update
-                                ? "text-status-warn"
-                                : "text-muted"
-                            }
-                          >
-                            / local {p.installed_version}
-                          </span>
-                        )}
-                      </div>
-                      {p.has_update && (
-                        <span className="inline-block px-1.5 py-0.2 rounded bg-status-warn/15 border border-status-warn/50 text-[10px] font-mono text-status-warn">
-                          Có bản mới
-                        </span>
-                      )}
-                    </div>
-                  ) : (
-                    <span className="text-xs text-muted/60">-</span>
-                  )}
-                </td>
-
-                {/* Local & Git */}
-                <td className="py-2.5 px-3 min-w-[150px]">
-                  <div className="space-y-0.5">
-                    {running && running.pid > 0 ? (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-mono font-semibold text-status-ready">
-                        <span className="w-1.5 h-1.5 rounded-full bg-status-ready animate-pulse" />
-                        RUNNING {firstPort ? `:${firstPort}` : ""}
+                {/* 2. Trạng thái & Git */}
+                <td
+                  className={`py-2.5 px-3 min-w-[140px] max-w-[210px] border-b border-edge transition-colors ${rowBg}`}
+                >
+                  <div className="space-y-1 min-w-0">
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-canvas border border-edge text-[11px] font-mono">
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                          isRunning
+                            ? "bg-status-ready animate-pulse"
+                            : statusMeta.dotClass
+                        }`}
+                      />
+                      <span
+                        className={
+                          isRunning
+                            ? "text-status-ready font-semibold"
+                            : statusMeta.textClass
+                        }
+                      >
+                        {isRunning
+                          ? firstPort
+                            ? `RUNNING :${firstPort}`
+                            : "RUNNING"
+                          : statusMeta.label}
                       </span>
-                    ) : (
-                      <span className="text-xs font-mono text-muted">
-                        {p.status}
-                      </span>
-                    )}
+                    </span>
                     {p.git_branch && (
-                      <div className="text-[11px] font-mono text-muted/80 truncate">
+                      <div
+                        title={`${p.git_branch}${p.git_commit ? ` @ ${p.git_commit}` : ""}`}
+                        className="text-[11px] font-mono text-muted/85 truncate"
+                      >
                         {p.git_branch}
                         {p.git_commit ? ` @ ${p.git_commit}` : ""}
                       </div>
@@ -265,42 +355,105 @@ export function ReleaseMatrixTable({
                   </div>
                 </td>
 
-                {/* Actions */}
+                {/* 3. Phát hành & Live */}
                 <td
-                  className="py-2.5 px-3.5 text-right"
+                  className={`py-2.5 px-3 min-w-[135px] max-w-[220px] border-b border-edge transition-colors ${rowBg}`}
+                >
+                  {hasWebTarget || hasDeskInfo ? (
+                    <div className="space-y-0.5 min-w-0">
+                      {hasWebTarget && (
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {webHealth ? (
+                            <span
+                              className={`text-[11px] font-mono font-semibold shrink-0 ${
+                                webHealth.online
+                                  ? webHealth.drift
+                                    ? "text-status-warn"
+                                    : "text-status-ready"
+                                  : "text-status-danger"
+                              }`}
+                            >
+                              {webHealth.online
+                                ? `ON ${webHealth.latency_ms}ms`
+                                : "OFFLINE"}
+                            </span>
+                          ) : (
+                            <span className="text-[11px] font-mono text-muted shrink-0">
+                              {webRel?.version || (p.live_url ? "Web Live" : "-")}
+                            </span>
+                          )}
+                          {webHealth?.live_version && (
+                            <span className="text-[11px] font-mono text-primary truncate">
+                              {webHealth.live_version}
+                            </span>
+                          )}
+                          {p.live_url && (
+                            <span
+                              title={p.live_url}
+                              className="text-[11px] font-mono text-muted truncate"
+                            >
+                              {p.live_url.replace(/^https?:\/\//, "")}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {hasDeskInfo && (
+                        <div className="flex items-center gap-1.5 font-mono text-[11px] min-w-0">
+                          <span className="text-primary font-semibold shrink-0">
+                            {deskRel?.version || p.latest_version || "-"}
+                          </span>
+                          {p.installed_version && (
+                            <span
+                              className={`truncate ${
+                                p.has_update ? "text-status-warn" : "text-muted"
+                              }`}
+                            >
+                              / local {p.installed_version}
+                            </span>
+                          )}
+                          {p.has_update && (
+                            <span className="px-1.5 py-0.2 rounded bg-status-warn/15 border border-status-warn/50 text-[10px] text-status-warn shrink-0">
+                              Có bản mới
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded bg-canvas border border-edge text-[11px] font-mono text-muted">
+                      Local
+                    </span>
+                  )}
+                </td>
+
+                {/* 4. Thao tác (sticky right so buttons are never clipped) */}
+                <td
+                  className={`sticky right-0 z-10 whitespace-nowrap py-2.5 pl-3 pr-3.5 text-right border-b border-l border-edge/60 transition-colors ${rowBg}`}
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <div className="inline-flex items-center gap-1">
-                    {p.status === "cloud_only" ? (
+                  <div className="inline-flex items-center justify-end gap-1.5 shrink-0">
+                    {renderPrimaryButton()}
+
+                    {isRunning && firstPort && onOpenLocalPort && (
                       <button
                         type="button"
-                        onClick={() => onHydrate(p)}
-                        title="Install / Clone về máy"
-                        className="h-7 px-2 rounded bg-accent text-canvas text-xs font-semibold inline-flex items-center gap-1"
+                        onClick={() => onOpenLocalPort(firstPort)}
+                        title={`Mở http://localhost:${firstPort}`}
+                        className="h-8 px-2.5 shrink-0 whitespace-nowrap rounded-md border border-status-ready/50 bg-status-ready/10 hover:bg-status-ready/20 text-status-ready text-xs font-mono font-semibold inline-flex items-center transition-colors"
                       >
-                        <Download className="w-3 h-3" />
-                        <span>Tải</span>
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => onLaunch(p)}
-                        title="Khởi chạy"
-                        className="h-7 px-2 rounded bg-accent text-canvas text-xs font-semibold inline-flex items-center gap-1"
-                      >
-                        <Play className="w-3 h-3 fill-current" />
-                        <span>Run</span>
+                        :{firstPort}
                       </button>
                     )}
 
-                    {running && running.pid > 0 && (
+                    {isRunning && (
                       <button
                         type="button"
                         onClick={() => onStopProcess(p)}
                         title="Dừng tiến trình đang chạy"
-                        className="h-7 w-7 rounded border border-status-danger/60 text-status-danger hover:bg-status-danger/10 inline-flex items-center justify-center"
+                        aria-label="Dừng tiến trình"
+                        className="h-8 w-8 shrink-0 rounded-md border border-status-danger/60 bg-status-danger/10 text-status-danger hover:bg-status-danger/20 inline-flex items-center justify-center transition-colors"
                       >
-                        <Square className="w-3 h-3 fill-current" />
+                        <Square className="w-3.5 h-3.5 fill-current" />
                       </button>
                     )}
 
@@ -309,9 +462,11 @@ export function ReleaseMatrixTable({
                         type="button"
                         onClick={() => onUpdateDesktop(p)}
                         title="Cập nhật Desktop App ngay"
-                        className="h-7 w-7 rounded border border-status-warn/60 text-status-warn hover:bg-status-warn/10 inline-flex items-center justify-center"
+                        aria-label="Cập nhật Desktop App"
+                        className="h-8 px-2.5 shrink-0 whitespace-nowrap rounded-md border border-status-warn/60 bg-status-warn/10 text-status-warn hover:bg-status-warn/20 text-xs font-medium inline-flex items-center gap-1.5 transition-colors"
                       >
-                        <RefreshCw className="w-3.5 h-3.5" />
+                        <RefreshCw className="w-3.5 h-3.5 shrink-0" />
+                        <span className="hidden xl:inline">Update</span>
                       </button>
                     )}
 
@@ -319,8 +474,9 @@ export function ReleaseMatrixTable({
                       <button
                         type="button"
                         onClick={() => onOpenLive(p)}
-                        title={`Mở ${p.live_url}`}
-                        className="h-7 w-7 rounded border border-edge bg-canvas hover:bg-elevated text-status-ready inline-flex items-center justify-center"
+                        title={`Mở Live Web (${p.live_url})`}
+                        aria-label="Mở Live Web"
+                        className="h-8 w-8 shrink-0 rounded-md border border-edge bg-canvas hover:bg-elevated text-status-ready inline-flex items-center justify-center transition-colors"
                       >
                         <Globe className="w-3.5 h-3.5" />
                       </button>
@@ -331,7 +487,8 @@ export function ReleaseMatrixTable({
                         type="button"
                         onClick={() => onCopyReleaseLink(deskRel.id)}
                         title="Copy Download Link"
-                        className="h-7 w-7 rounded border border-edge bg-canvas hover:bg-elevated text-muted hover:text-primary inline-flex items-center justify-center"
+                        aria-label="Copy Download Link"
+                        className="h-8 w-8 shrink-0 rounded-md border border-edge bg-canvas hover:bg-elevated text-muted hover:text-primary inline-flex items-center justify-center transition-colors"
                       >
                         <Link2 className="w-3.5 h-3.5" />
                       </button>
@@ -342,18 +499,22 @@ export function ReleaseMatrixTable({
                         <button
                           type="button"
                           onClick={() => onOpenExplorer(p)}
-                          title="Explorer"
-                          className="h-7 w-7 rounded border border-edge bg-canvas hover:bg-elevated text-muted hover:text-primary inline-flex items-center justify-center"
+                          title="Mở thư mục trong Explorer"
+                          aria-label="Mở thư mục"
+                          className="h-8 px-2.5 shrink-0 whitespace-nowrap rounded-md border border-edge bg-canvas hover:bg-elevated text-muted hover:text-primary text-xs font-medium inline-flex items-center gap-1.5 transition-colors"
                         >
-                          <FolderOpen className="w-3.5 h-3.5" />
+                          <FolderOpen className="w-3.5 h-3.5 shrink-0" />
+                          <span className="hidden 2xl:inline">Explorer</span>
                         </button>
                         <button
                           type="button"
                           onClick={() => onOpenVSCode(p)}
-                          title="VS Code"
-                          className="h-7 w-7 rounded border border-edge bg-canvas hover:bg-elevated text-muted hover:text-primary inline-flex items-center justify-center"
+                          title="Mở bằng VS Code"
+                          aria-label="Mở VS Code"
+                          className="h-8 px-2.5 shrink-0 whitespace-nowrap rounded-md border border-edge bg-canvas hover:bg-elevated text-muted hover:text-primary text-xs font-medium inline-flex items-center gap-1.5 transition-colors"
                         >
-                          <Code2 className="w-3.5 h-3.5" />
+                          <Code2 className="w-3.5 h-3.5 shrink-0" />
+                          <span className="hidden 2xl:inline">Code</span>
                         </button>
                       </>
                     )}
@@ -361,13 +522,12 @@ export function ReleaseMatrixTable({
                     <button
                       type="button"
                       onClick={() => onSelect(p)}
-                      title="Chi tiết"
-                      className="h-7 w-7 rounded border border-edge bg-canvas hover:bg-elevated text-muted hover:text-primary inline-flex items-center justify-center"
+                      title="Chi tiết & Cấu hình"
+                      aria-label="Chi tiết"
+                      className="h-8 px-2.5 shrink-0 whitespace-nowrap rounded-md border border-edge bg-canvas hover:bg-elevated text-muted hover:text-primary text-xs font-medium inline-flex items-center gap-1.5 transition-colors"
                     >
-                      {p.live_url ? (
-                        <ExternalLink className="w-3.5 h-3.5 hidden" />
-                      ) : null}
-                      <SlidersHorizontal className="w-3.5 h-3.5" />
+                      <SlidersHorizontal className="w-3.5 h-3.5 shrink-0" />
+                      <span className="hidden xl:inline">Chi tiết</span>
                     </button>
 
                     {onRequestDelete && (
@@ -375,7 +535,8 @@ export function ReleaseMatrixTable({
                         type="button"
                         onClick={() => onRequestDelete(p)}
                         title="Xóa dự án"
-                        className="h-7 w-7 rounded border border-edge bg-canvas hover:border-status-danger/60 hover:bg-status-danger/10 text-muted hover:text-status-danger inline-flex items-center justify-center"
+                        aria-label={`Xóa ${p.name}`}
+                        className="h-8 w-8 shrink-0 rounded-md border border-edge bg-canvas hover:border-status-danger/60 hover:bg-status-danger/10 text-muted hover:text-status-danger inline-flex items-center justify-center transition-colors"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>

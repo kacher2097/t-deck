@@ -28,7 +28,7 @@ interface InspectorLocalToolsCardProps {
   onSelectTpl: (id: string) => void;
   onGenerateBat: () => void;
   onSyncEnv: () => void;
-  onDeleted: (projectId: string) => void;
+  onRequestDelete: (project: ProjectView) => void;
   onNotify: (kind: "success" | "error" | "warn", msg: string) => void;
 }
 
@@ -43,16 +43,12 @@ export function InspectorLocalToolsCard({
   onSelectTpl,
   onGenerateBat,
   onSyncEnv,
-  onDeleted,
+  onRequestDelete,
   onNotify,
 }: InspectorLocalToolsCardProps) {
-  const [deleteLocalFiles, setDeleteLocalFiles] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
 
   useEffect(() => {
-    setDeleteLocalFiles(false);
-    setConfirmDelete(false);
     setCopiedId(false);
   }, [project.id]);
 
@@ -63,16 +59,6 @@ export function InspectorLocalToolsCard({
       setTimeout(() => setCopiedId(false), 1500);
     } catch {
       // ignore clipboard errors
-    }
-  };
-
-  const handleDelete = async () => {
-    try {
-      await api.deleteProject(project.id, deleteLocalFiles);
-      onDeleted(project.id);
-      onNotify("success", `Đã xóa "${project.name}".`);
-    } catch (err) {
-      onNotify("error", formatError(err));
     }
   };
 
@@ -212,73 +198,38 @@ export function InspectorLocalToolsCard({
       >
         <div className={UI_SECTION_TITLE_CLS}>Định danh & Hệ thống</div>
 
-        {!confirmDelete ? (
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="h-9 px-3 rounded-md bg-surface border border-edge flex items-center justify-between gap-2 flex-1 min-w-0">
-              <code
-                title={project.id}
-                className="font-mono text-xs text-primary truncate min-w-0"
-              >
-                {project.id}
-              </code>
-              <button
-                type="button"
-                onClick={handleCopyUUID}
-                title="Sao chép Project UUID"
-                className="text-xs text-muted hover:text-primary inline-flex items-center gap-1 shrink-0 transition-colors"
-              >
-                {copiedId ? (
-                  <Check className="w-3.5 h-3.5 text-status-ready" />
-                ) : (
-                  <Copy className="w-3.5 h-3.5" />
-                )}
-                <span>{copiedId ? "Copied" : "Copy"}</span>
-              </button>
-            </div>
-
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="h-9 px-3 rounded-md bg-surface border border-edge flex items-center justify-between gap-2 flex-1 min-w-0">
+            <code
+              title={project.id}
+              className="font-mono text-xs text-primary truncate min-w-0"
+            >
+              {project.id}
+            </code>
             <button
               type="button"
-              onClick={() => setConfirmDelete(true)}
-              className="box-border h-9 px-3 shrink-0 whitespace-nowrap rounded-md border border-status-danger/60 text-status-danger hover:bg-status-danger/15 text-xs font-medium inline-flex items-center gap-1.5 transition-colors"
+              onClick={handleCopyUUID}
+              title="Sao chép Project UUID"
+              className="text-xs text-muted hover:text-primary inline-flex items-center gap-1 shrink-0 transition-colors"
             >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>Xóa dự án</span>
+              {copiedId ? (
+                <Check className="w-3.5 h-3.5 text-status-ready" />
+              ) : (
+                <Copy className="w-3.5 h-3.5" />
+              )}
+              <span>{copiedId ? "Copied" : "Copy"}</span>
             </button>
           </div>
-        ) : (
-          <div className="p-3.5 rounded-md border border-status-danger/40 bg-status-danger/5 space-y-2.5">
-            <div className="text-xs font-semibold text-status-danger">
-              Xác nhận xóa "{project.name}" khỏi T-Deck?
-            </div>
-            {project.local_dir && (
-              <label className="flex items-center gap-2 text-xs text-muted cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={deleteLocalFiles}
-                  onChange={(e) => setDeleteLocalFiles(e.target.checked)}
-                  className="rounded border-edge bg-canvas"
-                />
-                <span>Xóa luôn thư mục mã nguồn/app trên ổ cứng</span>
-              </label>
-            )}
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleDelete}
-                className="box-border h-8 px-3.5 rounded-md bg-status-danger hover:bg-status-danger/90 text-white text-xs font-semibold transition-colors"
-              >
-                Xác nhận xóa
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirmDelete(false)}
-                className="box-border h-8 px-3 rounded-md border border-edge bg-surface hover:bg-elevated text-xs text-primary transition-colors"
-              >
-                Hủy
-              </button>
-            </div>
-          </div>
-        )}
+
+          <button
+            type="button"
+            onClick={() => onRequestDelete(project)}
+            className="box-border h-9 px-3 shrink-0 whitespace-nowrap rounded-md border border-status-danger/60 text-status-danger hover:bg-status-danger/15 text-xs font-medium inline-flex items-center gap-1.5 transition-colors"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Xóa dự án</span>
+          </button>
+        </div>
       </div>
     </div>
   );

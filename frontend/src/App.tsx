@@ -280,14 +280,6 @@ export function App() {
     [hub.refreshAll]
   );
 
-  const handleProjectDeleted = useCallback(
-    (projectId: string) => {
-      setSelectedProject((prev) => (prev?.id === projectId ? null : prev));
-      hub.refreshAll();
-    },
-    [hub.refreshAll]
-  );
-
   const allVisibleSelected =
     filteredProjects.length > 0 &&
     filteredProjects.every((p) => selectedIds.has(p.id));
@@ -538,6 +530,7 @@ export function App() {
               projects={filteredProjects}
               healthMap={hub.healthMap}
               runningMap={hub.runningMap}
+              busyAction={hub.busyCardId}
               selectionMode={selectionMode}
               selectedIds={selectedIds}
               onToggleSelect={handleToggleSelect}
@@ -548,6 +541,7 @@ export function App() {
               onHydrate={hub.handleHydrate}
               onUpdateDesktop={hub.handleUpdateDesktopFromList}
               onOpenLive={hub.handleOpenLive}
+              onOpenLocalPort={hub.handleOpenLocalPort}
               onStopProcess={hub.handleStopProcess}
               onCopyReleaseLink={hub.handleCopyReleaseLink}
               onOpenExplorer={hub.handleOpenExplorer}
@@ -589,7 +583,7 @@ export function App() {
         categories={hub.categories}
         onClose={() => setSelectedProject(null)}
         onUpdated={handleProjectUpdated}
-        onDeleted={handleProjectDeleted}
+        onRequestDelete={handleRequestSingleDelete}
         onCreateCategory={hub.handleCreateCategory}
         onNotify={notify}
       />

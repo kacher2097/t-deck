@@ -25,7 +25,7 @@ interface InspectorConfigTabProps {
   project: ProjectView;
   categories: Category[];
   onUpdated: (updated: ProjectView) => void;
-  onDeleted: (projectId: string) => void;
+  onRequestDelete: (project: ProjectView) => void;
   onCreateCategory: (name: string) => Promise<Category | null>;
   onNotify: (kind: "success" | "error" | "warn", msg: string) => void;
 }
@@ -34,7 +34,7 @@ export function InspectorConfigTab({
   project,
   categories,
   onUpdated,
-  onDeleted,
+  onRequestDelete,
   onCreateCategory,
   onNotify,
 }: InspectorConfigTabProps) {
@@ -279,7 +279,7 @@ export function InspectorConfigTab({
           onSelectTpl={setSelectedTpl}
           onGenerateBat={handleGenerateBat}
           onSyncEnv={handleSyncEnv}
-          onDeleted={onDeleted}
+          onRequestDelete={onRequestDelete}
           onNotify={onNotify}
         />
       </div>

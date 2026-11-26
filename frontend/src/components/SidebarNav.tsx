@@ -12,6 +12,7 @@ import {
 import type React from "react";
 import { useMemo, useState } from "react";
 import type { Category, ProjectView } from "../types/project";
+import { ConfirmPopover } from "./ui/ConfirmPopover";
 import { UI_SECTION_TITLE_CLS } from "./ui/uiTokens";
 
 interface SidebarNavProps {
@@ -276,21 +277,40 @@ export function SidebarNav({
                   <span className="truncate">{cat.name}</span>
                 </button>
                 {/* Fixed w-7 right slot: swaps count <-> delete button on hover with ZERO horizontal shift */}
-                <span className={`${COUNT_SLOT_CLS} group-hover:hidden`}>
-                  {count}
-                </span>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDeleteCategory(cat);
-                  }}
-                  title={`Xóa nhóm "${cat.name}"`}
-                  aria-label={`Xóa nhóm ${cat.name}`}
-                  className="hidden group-hover:inline-flex w-7 h-4 items-center justify-end text-muted hover:text-status-danger shrink-0"
+                <ConfirmPopover
+                  title={`Xóa nhóm "${cat.name}"?`}
+                  description={
+                    count > 0
+                      ? `${count} dự án trong nhóm sẽ chuyển về "Chưa phân nhóm".`
+                      : "Nhóm trống sẽ bị gỡ khỏi danh sách."
+                  }
+                  confirmLabel="Xóa nhóm"
+                  onConfirm={() => onDeleteCategory(cat)}
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                  {({ open, toggle }) => (
+                    <>
+                      <span
+                        className={`${COUNT_SLOT_CLS} ${
+                          open ? "hidden" : "group-hover:hidden"
+                        }`}
+                      >
+                        {count}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={toggle}
+                        title={`Xóa nhóm "${cat.name}"`}
+                        aria-label={`Xóa nhóm ${cat.name}`}
+                        aria-expanded={open}
+                        className={`${
+                          open ? "inline-flex text-status-danger" : "hidden group-hover:inline-flex text-muted"
+                        } w-7 h-4 items-center justify-end hover:text-status-danger shrink-0`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </>
+                  )}
+                </ConfirmPopover>
               </div>
             );
           })}
