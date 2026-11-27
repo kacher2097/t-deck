@@ -8,8 +8,8 @@
 
 ### 1.1. Cô lập Khóa Bí mật Đám mây (`settings.json` vs `.env`)
 - Khi người dùng cấu hình `Access Key ID` và `Secret Access Key` của Cloudflare R2 trên giao diện **Cài đặt (⚙️)**:
-  - `SettingsManager.Save()` (`internal/config/settings.go`) **luôn xóa trắng** hai trường `access_key_id` và `secret_access_key` trước khi ghi cấu hình chung xuống `%APPDATA%\TDeck\settings.json`.
-  - Hai khóa bí mật này chỉ được ghi riêng vào tệp `%APPDATA%\TDeck\.env` với quyền tệp hạn chế (`0600`).
+  - `SettingsManager.Save()` (`internal/config/settings.go`) **luôn xóa trắng** hai trường `access_key_id` và `secret_access_key` trước khi ghi cấu hình chung xuống `<InstallDir>\settings.json` (thư mục cài đặt người dùng).
+  - Hai khóa bí mật này chỉ được ghi riêng vào tệp `<InstallDir>\.env` với quyền tệp hạn chế (`0600`).
   - Khóa bí mật không bao giờ xuất hiện trong `catalog.json`, trong cơ sở dữ liệu `tdeck.db` hay trong bất kỳ bản ghi log nào.
 
 ### 1.2. Tự động Làm sạch Bí mật khi Đồng bộ `.env.example`
@@ -29,7 +29,7 @@
   3. Nếu quá trình xác thực hoặc giải nén thất bại, hệ thống tự động hủy bỏ bản tải lỗi và khôi phục nguyên trạng từ `.bak`.
 
 ### 1.5. An toàn Dữ liệu Nguồn khi Xóa Dự án
-- Các thao tác **Xóa dự án** hoặc **Chọn nhiều → Xóa đã chọn** trên giao diện T-Deck được thiết kế chỉ đánh dấu xóa mềm (`deleted_at` tombstone) trong SQLite và gỡ ảnh cache `.png`/`.icon.png` trong `%APPDATA%\TDeck\thumbnails`, **tuyệt đối không xóa thư mục mã nguồn gốc** trên ổ đĩa của người dùng.
+- Các thao tác **Xóa dự án** hoặc **Chọn nhiều → Xóa đã chọn** trên giao diện T-Deck được thiết kế chỉ đánh dấu xóa mềm (`deleted_at` tombstone) trong SQLite và gỡ ảnh cache `.png`/`.icon.png` trong `<InstallDir>\thumbnails`, **tuyệt đối không xóa thư mục mã nguồn gốc** trên ổ đĩa của người dùng.
 
 ---
 

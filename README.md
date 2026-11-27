@@ -6,7 +6,7 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript&logoColor=white)
 ![SQLite FTS5](https://img.shields.io/badge/SQLite-WAL_%2B_FTS5-003B57?logo=sqlite&logoColor=white)
 ![Cloudflare R2](https://img.shields.io/badge/Cloudflare_R2-S3_Sync-F38020?logo=cloudflare&logoColor=white)
-![Platform](https://img.shields.io/badge/Platform-Windows_x64-0078D6?logo=windows&logoColor=white)
+![Platform](https://img.shields.io/badge/Platform-Windows_x64_%7C_Linux_x64-0078D6?logo=windows&logoColor=white)
 
 **T-Deck** là ứng dụng desktop điều phối danh mục phần mềm (App Catalog), khởi chạy môi trường phát triển (Workspace Launcher) và quản lý phát hành đa nền tảng (Hybrid Web & Desktop Release Manager) được xây dựng trên **Wails v2 (Go + WebView2)**, **React 19**, **SQLite FTS5** và **Cloudflare R2**.
 
@@ -29,7 +29,7 @@ Thiết kế theo triết lý **Local-First & Zero-Server**: mọi thao tác tì
 
 ## Điểm nổi bật (Highlights)
 
-- **Tự động phát hiện dự án thông minh (`Scan Local`)**: Quét sâu ổ đĩa và các thư mục chứa workspace (`D:\`, `D:\app`, `C:\TDeckApps`), tự động nhận diện ngôn ngữ/framework (Go, Wails, React, Vite, Next.js, Electron, Tauri, Python, Java/Spring Boot, Maven/Gradle, Rust, Docker) và lọc bỏ hoàn toàn các phần mềm cài sẵn của bên thứ ba (DB clients, VPN, trình duyệt, SDK/runtime).
+- **Tự động phát hiện dự án thông minh (`Scan Local`)**: Quét sâu ổ đĩa và các thư mục chứa workspace (`D:\`, `D:\app`, `<InstallDir>\apps`), tự động nhận diện ngôn ngữ/framework (Go, Wails, React, Vite, Next.js, Electron, Tauri, Python, Java/Spring Boot, Maven/Gradle, Rust, Docker) và lọc bỏ hoàn toàn các phần mềm cài sẵn của bên thứ ba (DB clients, VPN, trình duyệt, SDK/runtime).
 - **Tự động trích xuất Brand Logo & Kết xuất Poster 16:9**:
   - Tự động dò tìm bộ icon thương hiệu (`.png` / `.ico` hỗ trợ cả frame PNG nhúng lẫn 32-bit BGRA DIB) trong thư mục dự án khi bấm **Scan Local**.
   - Với dự án **có bộ icon**: tự động gắn **App Icon Badge** cạnh tên dự án trên Card, bảng Release Matrix và cửa sổ Chi tiết; đồng thời kết xuất logo vào góc trái (`APP ICON`) và khung kính tối (Hero Emblem) trên poster 16:9 (`1280×720`).
@@ -63,8 +63,8 @@ flowchart TD
     end
 
     subgraph Storage ["Local & Cloud Storage"]
-        SQLite[("SQLite WAL + FTS5\n%APPDATA%/TDeck/tdeck.db")]
-        Thumbs[("Thumbnail & Icon Cache\n%APPDATA%/TDeck/thumbnails/")]
+        SQLite[("SQLite WAL + FTS5\n<InstallDir>/tdeck.db")]
+        Thumbs[("Thumbnail & Icon Cache\n<InstallDir>/thumbnails/")]
         Disk[("Local Workspaces\n.tdeck-meta.json & .tdeck.json")]
         R2[("Cloudflare R2 Bucket\ncatalog.json, thumbnails/, releases/")]
     end
@@ -101,7 +101,7 @@ flowchart TD
 
 ### 1. Yêu cầu môi trường (Prerequisites)
 
-- **Hệ điều hành**: Windows 10 / 11 (64-bit) với Microsoft Edge WebView2 Runtime.
+- **Hệ điều hành**: Windows 10 / 11 (64-bit) với Microsoft Edge WebView2 Runtime, hoặc Linux 64-bit (`libgtk-3`, `libwebkit2gtk-4.1`).
 - **Go**: `>= 1.26` (sử dụng Pure-Go SQLite `modernc.org/sqlite`, **không** yêu cầu cài đặt GCC/CGO).
 - **Node.js & npm**: `>= 20.x` (để biên dịch giao diện React 19 + Vite 7).
 - **Wails CLI**: `v2.16.0+`
@@ -123,8 +123,8 @@ Chỉnh sửa file `.env` (hoặc cấu hình trực tiếp trên giao diện **
 ```dotenv
 # Danh sách thư mục gốc chứa mã nguồn (phân tách bằng dấu ; hoặc ,)
 TDECK_WORKSPACE_DIRS=D:\app;D:\projects
-# Thư mục cài đặt các ứng dụng Desktop tải từ R2
-TDECK_APPS_DIR=C:\TDeckApps
+# Thư mục cài đặt các ứng dụng Desktop tải từ R2 (mặc định: <InstallDir>/apps)
+TDECK_APPS_DIR=./apps
 # Số ngày hoạt động gần đây để lọc khi quét
 TDECK_SCAN_RECENT_DAYS=120
 # Danh sách tên thư mục bỏ qua khi quét
@@ -165,6 +165,9 @@ Dự án đi kèm script [build.bat](file:///d:/app/t-deck/build.bat) tự độ
 
 # Cách 5: Đóng gói bộ cài đặt Windows NSIS (build\bin\TDeck-amd64-installer.exe)
 .\build.bat installer
+
+# Cách 6: Đóng gói tất cả bản Release cho Windows & Linux (build\release\)
+.\build.bat release
 ```
 
 ---

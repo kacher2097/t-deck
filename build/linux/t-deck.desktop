@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=T-Deck
+GenericName=Application Hub & Release Manager
+Comment=Quản lý danh mục dự án, khởi chạy môi trường phát triển và phát hành qua Cloudflare R2
+Exec=@INSTALL_DIR@/TDeck %U
+Icon=@INSTALL_DIR@/t-deck.png
+Terminal=false
+Categories=Development;Utility;
+StartupNotify=true
+StartupWMClass=TDeck
+

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -64,7 +65,12 @@ func RunBuildCommand(ctx context.Context, workDir string, cmdStr string, onLine 
 		return errors.New("thư mục build không hợp lệ")
 	}
 
-	cmd := exec.CommandContext(ctx, "cmd.exe", "/C", cleanCmd)
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		cmd = exec.CommandContext(ctx, "cmd.exe", "/C", cleanCmd)
+	} else {
+		cmd = exec.CommandContext(ctx, "sh", "-c", cleanCmd)
+	}
 	cmd.Dir = workDir
 	hideConsoleWindow(cmd)
 

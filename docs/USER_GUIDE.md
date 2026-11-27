@@ -27,7 +27,7 @@ Bấm vào biểu tượng **Cài đặt (⚙️)** ở góc trên cùng bên ph
 
 ### 1.1. Cấu hình Không gian làm việc (Workspace Settings)
 - **Thư mục Workspace (`WorkspaceDirs`)**: Nhập một hoặc nhiều đường dẫn gốc chứa mã nguồn của bạn (ví dụ: `D:\`, `D:\app`, `E:\Workspaces`). Bạn có thể bấm nút **Chọn thư mục** để duyệt trực tiếp từ Windows Explorer.
-- **Thư mục cài đặt Apps (`AppsDir`)**: Đường dẫn mặc định nơi T-Deck giải nén các ứng dụng Desktop tải từ Cloudflare R2 về máy (mặc định: `C:\TDeckApps`).
+- **Thư mục cài đặt Apps (`AppsDir`)**: Đường dẫn mặc định nơi T-Deck giải nén các ứng dụng Desktop tải từ Cloudflare R2 về máy (mặc định: `<InstallDir>\apps` ngay trong thư mục cài đặt).
 - **Giới hạn ngày hoạt động (`ScanRecentDays`)**: Chỉ quét các dự án mới có thay đổi trong $N$ ngày gần đây (đặt `0` nếu muốn quét toàn bộ không giới hạn thời gian).
 - **Thư mục loại trừ bổ sung (`ScanExcludeDirs`)**: Danh sách tên thư mục bạn muốn bộ quét bỏ qua (phân tách bằng dấu phẩy).
 
@@ -38,7 +38,7 @@ Nếu bạn muốn đồng bộ danh mục và lưu trữ bản cài đặt gi�
 3. Bấm **Kiểm tra kết nối R2** để xác nhận quyền đọc/ghi vào bucket trước khi bấm **Lưu cài đặt**.
 
 > [!IMPORTANT]
-> Khi lưu cài đặt, T-Deck tự động tách riêng `Access Key ID` và `Secret Access Key` vào file `%APPDATA%\TDeck\.env` (quyền truy cập riêng tư) và xóa trắng hai trường này trong `settings.json` để tránh lộ khóa bí mật.
+> Khi lưu cài đặt, T-Deck tự động tách riêng `Access Key ID` và `Secret Access Key` vào file `<InstallDir>\.env` (quyền truy cập riêng tư) và xóa trắng hai trường này trong `settings.json` để tránh lộ khóa bí mật.
 
 ---
 

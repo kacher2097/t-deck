@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -94,7 +95,7 @@ func (pm *ProcessMonitor) ListRunning() []model.RunningProcess {
 	return out
 }
 
-// StopProject terminates the tracked process tree for projectID via taskkill.
+// StopProject terminates the tracked process tree for projectID.
 func (pm *ProcessMonitor) StopProject(projectID string) error {
 	if pm == nil {
 		return nil
@@ -109,9 +110,14 @@ func (pm *ProcessMonitor) StopProject(projectID string) error {
 	if !ok || t.pid <= 0 {
 		return nil
 	}
-	killCmd := exec.Command("taskkill", "/T", "/F", "/PID", strconv.Itoa(t.pid))
-	hideConsoleWindow(killCmd)
-	_ = killCmd.Run()
+	if runtime.GOOS == "windows" {
+		killCmd := exec.Command("taskkill", "/T", "/F", "/PID", strconv.Itoa(t.pid))
+		hideConsoleWindow(killCmd)
+		_ = killCmd.Run()
+	} else {
+		_ = exec.Command("pkill", "-TERM", "-P", strconv.Itoa(t.pid)).Run()
+		_ = exec.Command("kill", "-TERM", strconv.Itoa(t.pid)).Run()
+	}
 	if pm.onDelta != nil {
 		pm.onDelta(model.RunningProcess{
 			ProjectID: projectID,
@@ -220,6 +226,9 @@ func (pm *ProcessMonitor) pollOnce() {
 }
 
 func queryWindowsPIDs() map[int]bool {
+	if runtime.GOOS != "windows" {
+		return nil
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "tasklist", "/FO", "CSV", "/NH")
@@ -243,6 +252,9 @@ func queryWindowsPIDs() map[int]bool {
 }
 
 func queryListeningPortsByPID() map[int][]int {
+	if runtime.GOOS != "windows" {
+		return nil
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "netstat", "-ano", "-p", "tcp")

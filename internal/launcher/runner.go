@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"t-deck/internal/config"
@@ -119,7 +120,13 @@ func (r *Runner) launchWeb(p model.ProjectView) (model.LaunchResult, error) {
 		if refresher, ok := r.repo.(interface{ RefreshLocalFlags(string) error }); ok {
 			_ = refresher.RefreshLocalFlags(p.ID)
 		}
-		_ = r.starter.Start(p.LocalDir, "notepad.exe", envPath)
+		if runtime.GOOS == "windows" {
+			_ = r.starter.Start(p.LocalDir, "notepad.exe", envPath)
+		} else if runtime.GOOS == "darwin" {
+			_ = r.starter.Start(p.LocalDir, "open", envPath)
+		} else {
+			_ = r.starter.Start(p.LocalDir, "xdg-open", envPath)
+		}
 
 		return model.LaunchResult{
 			ProjectID:  p.ID,
@@ -207,6 +214,9 @@ func (r *Runner) launchDesktop(p model.ProjectView) (model.LaunchResult, error) 
 	// Launch the desktop executable directly first so Windows never flashes an intermediate
 	// black cmd.exe window; fall back to hidden-window Windows Shell start only if elevation (UAC) is needed.
 	if pid, err := r.startTracked(exeDir, exePath); err != nil {
+		if runtime.GOOS != "windows" {
+			return model.LaunchResult{}, fmt.Errorf("launch %s: %w", filepath.Base(exePath), err)
+		}
 		if pidShell, shellErr := r.startTracked(exeDir, "cmd.exe", "/C", "start", "", exePath); shellErr != nil {
 			return model.LaunchResult{}, fmt.Errorf("launch %s: %w", filepath.Base(exePath), shellErr)
 		} else if pidShell > 0 && r.monitor != nil {
@@ -238,6 +248,20 @@ func (r *Runner) startConsoleTracked(dir, batPath, winTitle string) (int, error)
 		return 0, fmt.Errorf("tên script chứa ký tự không hợp lệ: %s", batBase)
 	}
 	workDir := filepath.Dir(batPath)
+	if runtime.GOOS != "windows" {
+		if _, isOS := r.starter.(osProcessStarter); !isOS {
+			return 0, r.starter.Start(workDir, "sh", batPath)
+		}
+		cmd := exec.Command("sh", batPath)
+		cmd.Dir = workDir
+		if err := cmd.Start(); err != nil {
+			return 0, err
+		}
+		if cmd.Process != nil {
+			return cmd.Process.Pid, nil
+		}
+		return 0, nil
+	}
 	if _, isOS := r.starter.(osProcessStarter); !isOS {
 		return 0, r.starter.Start(dir, "cmd.exe", "/C", "start", winTitle, "/D", workDir, "cmd.exe", "/K", batBase)
 	}
@@ -290,6 +314,10 @@ func findExistingBat(dir string) string {
 	if err != nil {
 		return ""
 	}
+	wantExt := ".bat"
+	if runtime.GOOS != "windows" {
+		wantExt = ".sh"
+	}
 	var fallback string
 	for _, e := range entries {
 		if e.IsDir() {
@@ -297,10 +325,10 @@ func findExistingBat(dir string) string {
 		}
 		name := e.Name()
 		lower := strings.ToLower(name)
-		if !strings.HasSuffix(lower, ".bat") || lower == "gradlew.bat" || strings.HasPrefix(lower, "build") || strings.HasPrefix(lower, "tao-phim-tat") || strings.HasPrefix(lower, "get_cookie") {
+		if !strings.HasSuffix(lower, wantExt) || lower == "gradlew.bat" || strings.HasPrefix(lower, "build") || strings.HasPrefix(lower, "tao-phim-tat") || strings.HasPrefix(lower, "get_cookie") {
 			continue
 		}
-		if lower == strings.ToLower(config.DefaultBatFile) || strings.HasPrefix(lower, "start") || strings.HasPrefix(lower, "run") {
+		if lower == strings.ToLower(config.DefaultBatFile) || lower == "start.sh" || strings.HasPrefix(lower, "start") || strings.HasPrefix(lower, "run") {
 			return name
 		}
 		if fallback == "" {
@@ -376,6 +404,12 @@ func resolveDesktopExePath(localDir, exeName string) string {
 }
 
 func isRunnableDesktopExe(lower string) bool {
+	if runtime.GOOS != "windows" {
+		if strings.HasSuffix(lower, ".appimage") || strings.HasSuffix(lower, ".sh") {
+			return true
+		}
+		return false
+	}
 	if !strings.HasSuffix(lower, ".exe") {
 		return false
 	}
@@ -395,7 +429,7 @@ func sanitizeConsoleTitle(name string) string {
 	return cleaned
 }
 
-// OpenInExplorer opens Windows Explorer at the project's local_dir.
+// OpenInExplorer opens the system file manager at the project's local_dir.
 func (r *Runner) OpenInExplorer(projectID string) error {
 	p, err := r.repo.GetProject(projectID)
 	if err != nil {
@@ -404,10 +438,17 @@ func (r *Runner) OpenInExplorer(projectID string) error {
 	if !fsutil.DirExists(p.LocalDir) {
 		return fmt.Errorf("directory not found: %s", p.LocalDir)
 	}
-	return r.starter.Start("", "explorer.exe", p.LocalDir)
+	switch runtime.GOOS {
+	case "windows":
+		return r.starter.Start("", "explorer.exe", p.LocalDir)
+	case "darwin":
+		return r.starter.Start("", "open", p.LocalDir)
+	default:
+		return r.starter.Start("", "xdg-open", p.LocalDir)
+	}
 }
 
-// OpenInEditor opens the project's local_dir in VS Code, IntelliJ, or Windows Terminal.
+// OpenInEditor opens the project's local_dir in VS Code, IntelliJ, or the system Terminal.
 func (r *Runner) OpenInEditor(projectID string, editor string) error {
 	p, err := r.repo.GetProject(projectID)
 	if err != nil {
@@ -415,6 +456,41 @@ func (r *Runner) OpenInEditor(projectID string, editor string) error {
 	}
 	if !fsutil.DirExists(p.LocalDir) {
 		return fmt.Errorf("directory not found: %s", p.LocalDir)
+	}
+
+	if runtime.GOOS != "windows" {
+		switch strings.ToLower(strings.TrimSpace(editor)) {
+		case config.EditorVSCode, "":
+			if path, err := r.starter.LookPath("code"); err == nil {
+				return r.starter.Start(p.LocalDir, path, p.LocalDir)
+			}
+			return fmt.Errorf("không tìm thấy VS Code (lệnh 'code') trong PATH")
+		case config.EditorIntelliJ:
+			for _, bin := range []string{"idea", "idea.sh"} {
+				if path, err := r.starter.LookPath(bin); err == nil {
+					return r.starter.Start(p.LocalDir, path, p.LocalDir)
+				}
+			}
+			return fmt.Errorf("không tìm thấy IntelliJ IDEA trong PATH")
+		case config.EditorTerminal:
+			if runtime.GOOS == "darwin" {
+				return r.starter.Start(p.LocalDir, "open", "-a", "Terminal", p.LocalDir)
+			}
+			for _, term := range []string{"x-terminal-emulator", "gnome-terminal", "konsole", "xfce4-terminal", "alacritty", "kitty", "xterm"} {
+				if path, err := r.starter.LookPath(term); err == nil {
+					if term == "gnome-terminal" || term == "xfce4-terminal" {
+						return r.starter.Start(p.LocalDir, path, "--working-directory", p.LocalDir)
+					}
+					if term == "konsole" {
+						return r.starter.Start(p.LocalDir, path, "--workdir", p.LocalDir)
+					}
+					return r.starter.Start(p.LocalDir, path)
+				}
+			}
+			return fmt.Errorf("không tìm thấy ứng dụng Terminal trên hệ thống")
+		default:
+			return fmt.Errorf("unsupported editor %q", editor)
+		}
 	}
 
 	switch strings.ToLower(strings.TrimSpace(editor)) {

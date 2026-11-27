@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -270,6 +271,10 @@ func copyFileSimple(src, dst string) error {
 func isWindowsProcessRunning(exeName string) bool {
 	if strings.TrimSpace(exeName) == "" {
 		return false
+	}
+	if runtime.GOOS != "windows" {
+		cmd := exec.Command("pgrep", "-x", exeName)
+		return cmd.Run() == nil
 	}
 	cmd := exec.Command("tasklist", "/FI", "IMAGENAME eq "+exeName, "/FO", "CSV", "/NH")
 	hideCloudCmdWindow(cmd)

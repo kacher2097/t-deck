@@ -4,6 +4,21 @@ Mọi thay đổi đáng chú ý của dự án **T-Deck** đều được ghi n
 
 ---
 
+## [v2.2.0] - 2026-11-27
+
+### Thêm mới (Added)
+- **Lưu dữ liệu mặc định tại Thư mục Cài đặt của Người dùng (`<InstallDir>`)**:
+  - Chuyển toàn bộ vị trí lưu mặc định của `tdeck.db`, `settings.json`, `.env`, `thumbnails/` và `apps/` từ ổ `C:` (`%APPDATA%\TDeck` & `C:\TDeckApps`) sang ngay trong thư mục cài đặt mà người dùng chọn (`ResolveDefaultDataDir` trong `internal/config/settings.go`).
+  - Tự động di chuyển dữ liệu cũ từ `%APPDATA%\TDeck` sang thư mục cài đặt mới ở lần khởi chạy đầu tiên nếu chưa có `tdeck.db`, đồng thời hỗ trợ ghi đè qua biến `TDECK_DATA_DIR`.
+- **Bộ cài đặt Chuẩn cho Windows & Linux + Gói Phát hành Đa Hệ điều hành**:
+  - **Windows NSIS Installer (`build/windows/installer/project.nsi`)**: Lưu chuẩn UTF-8 BOM + `MUI_LANGUAGE "Vietnamese"` không lỗi font tiếng Việt, đầy đủ checkbox lựa chọn (Desktop Shortcut, Start Menu, Khởi động cùng Windows, Thêm vào PATH, Khởi chạy ngay / Mở thư mục cài đặt) và hỏi giữ lại dữ liệu khi gỡ cài đặt.
+  - **Linux Installer (`build/linux/install.sh`, `uninstall.sh`, `t-deck.desktop`)**: Hỗ trợ hộp thoại đồ họa (`zenity` / `whiptail`) và CLI UTF-8 tiếng Việt với đầy đủ checkbox tạo shortcut Desktop, Menu Ứng dụng, `~/.local/bin`, Autostart.
+  - **Release Packaging (`scripts/package-releases.ps1`, `.github/workflows/release.yml`, `build.bat release`)**: Xuất đồng thời `TDeck-windows-amd64-installer.exe`, `TDeck-windows-amd64-portable.zip`, `TDeck-linux-amd64-installer.run`, `TDeck-linux-amd64.tar.gz` kèm `SHA256SUMS.txt`.
+- **Hỗ trợ Đa nền tảng trong Launcher & Process Monitor**:
+  - Bổ sung nhánh chạy lệnh build (`sh -c`), mở thư mục/IDE/Terminal (`xdg-open`, `gnome-terminal`/`konsole`/`xterm`), chạy script `.sh` và dừng tiến trình trên Linux.
+
+---
+
 ## [v2.1.0] - 2026-11-27
 
 ### Thêm mới (Added)

@@ -358,11 +358,20 @@ func (a *App) isSafeProjectDeleteTarget(dir string) bool {
 	if a.settingsMgr == nil {
 		return true
 	}
+	cleaned := filepath.Clean(strings.TrimSpace(dir))
+	for _, protected := range []string{
+		a.settingsMgr.BaseDir(),
+		a.settingsMgr.ThumbnailsDir(),
+		a.settingsMgr.DefaultAppsDir(),
+	} {
+		if pClean := filepath.Clean(strings.TrimSpace(protected)); pClean != "" && strings.EqualFold(cleaned, pClean) {
+			return false
+		}
+	}
 	settings, err := a.settingsMgr.Load()
 	if err != nil {
 		return true
 	}
-	cleaned := filepath.Clean(strings.TrimSpace(dir))
 	for _, ws := range settings.WorkspaceDirs {
 		if wsClean := filepath.Clean(strings.TrimSpace(ws)); wsClean != "" && strings.EqualFold(cleaned, wsClean) {
 			return false
@@ -381,6 +390,10 @@ func isSafeDeleteTarget(dir string) bool {
 	}
 	vol := filepath.VolumeName(cleaned)
 	if vol != "" && strings.EqualFold(cleaned, vol+string(filepath.Separator)) {
+		return false
+	}
+	switch strings.ToLower(cleaned) {
+	case "/", "/bin", "/boot", "/dev", "/etc", "/home", "/lib", "/lib64", "/mnt", "/opt", "/proc", "/root", "/run", "/sbin", "/srv", "/sys", "/tmp", "/usr", "/var":
 		return false
 	}
 	return cleaned != string(filepath.Separator) && cleaned != "." && cleaned != ".."

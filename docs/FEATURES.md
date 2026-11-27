@@ -36,7 +36,7 @@ Tài liệu này mô tả chi tiết từng phân hệ tính năng của **T-Dec
 
 ### 2.2. Hai Chế độ Kết xuất (Có Brand Icon vs Không có Brand Icon)
 - **Khi dự án có Brand Icon**:
-  1. Xuất file riêng `%APPDATA%\TDeck\thumbnails\<id>.icon.png` (`128×128` sắc nét với nội suy Catmull-Rom) và cấp trường `icon_url` cho giao diện hiển thị cạnh tên dự án trên Card, bảng Matrix và tiêu đề Modal.
+  1. Xuất file riêng `<InstallDir>\thumbnails\<id>.icon.png` (`128×128` sắc nét với nội suy Catmull-Rom) và cấp trường `icon_url` cho giao diện hiển thị cạnh tên dự án trên Card, bảng Matrix và tiêu đề Modal.
   2. Kết xuất poster `1280×720` có khóa nhận diện thương hiệu: gắn khung icon bo góc `124×124` kèm huy hiệu `APP ICON` ở góc trên trái và đặt tấm kính tối `288×288` chứa logo dự án ở tâm khung schematic bên phải.
 - **Khi dự án không có Brand Icon**:
   - Giữ nguyên 100% thiết kế poster kỹ thuật `1280×720` tiêu chuẩn (gồm thanh màu chủ đề, nhãn phân vùng kiến trúc, tiêu đề dự án, các huy hiệu công nghệ và sơ đồ kiến trúc đặc trưng theo từng miền nghiệp vụ).

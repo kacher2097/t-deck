@@ -102,9 +102,9 @@ flowchart TD
 
     DB --> SQLite[("tdeck.db - SQLite WAL + FTS5")]
     Scan --> Disk["Local Disk (.tdeck-meta.json, .env, .git/config)"]
-    Run --> OS["Windows Shell (cmd.exe / explorer / code / wt)"]
+    Run --> OS["OS Shell (Windows / Linux / macOS)"]
     Cloud --> R2[("Cloudflare R2 - catalog.json, thumbnails, releases")]
-    Cfg --> Files["%APPDATA%/TDeck/settings.json + .env"]
+    Cfg --> Files["<InstallDir>/settings.json + .env"]
 ```
 
 ### 3.2. Cơ chế Neo Danh tính (`.tdeck-meta.json`) & Bảo mật Secrets

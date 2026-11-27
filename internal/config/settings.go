@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -21,7 +22,7 @@ type R2Config struct {
 	PublicDomain    string `json:"public_domain"`
 }
 
-// Settings holds local machine configuration stored in %APPDATA%\TDeck\settings.json and .env.
+// Settings holds local machine configuration stored in <InstallDir>\settings.json and .env.
 type Settings struct {
 	WorkspaceDirs   []string `json:"workspace_dirs"`
 	AppsDir         string   `json:"apps_dir"`
@@ -37,19 +38,178 @@ type SettingsManager struct {
 	envPath    string
 }
 
-// NewSettingsManager creates a SettingsManager rooted at %APPDATA%\TDeck (or customDir if non-empty).
+// ResolveDefaultDataDir resolves the user-chosen installation directory for storing T-Deck data
+// (tdeck.db, settings.json, .env, thumbnails/, apps/).
+// Priority: TDECK_DATA_DIR env -> <repoRoot> (dev build/bin) -> <exeDir> (installed app) -> os.UserConfigDir/TDeck (if read-only).
+func ResolveDefaultDataDir() (string, error) {
+	if envDir, ok := lookupNonEmptyEnv(EnvKeyDataDir); ok {
+		return filepath.Clean(envDir), nil
+	}
+
+	candidate := ""
+	if exe, err := os.Executable(); err == nil {
+		if resolved, rErr := filepath.EvalSymlinks(exe); rErr == nil {
+			exe = resolved
+		}
+		exeDir := filepath.Dir(exe)
+		if isTempOrGoBuildDir(exeDir) {
+			if wd, wdErr := os.Getwd(); wdErr == nil {
+				candidate = wd
+			}
+		} else if devRoot := detectDevRepoRoot(exeDir); devRoot != "" {
+			candidate = devRoot
+		} else {
+			candidate = exeDir
+		}
+	}
+
+	if candidate == "" {
+		if wd, err := os.Getwd(); err == nil {
+			candidate = wd
+		}
+	}
+
+	if candidate != "" && isDirWritable(candidate) {
+		return filepath.Clean(candidate), nil
+	}
+
+	cfgDir, err := os.UserConfigDir()
+	if err != nil {
+		if candidate != "" {
+			return filepath.Clean(candidate), nil
+		}
+		return "", err
+	}
+	return filepath.Join(cfgDir, AppName), nil
+}
+
+func isTempOrGoBuildDir(dir string) bool {
+	norm := strings.ToLower(filepath.Clean(dir))
+	tmp := strings.ToLower(filepath.Clean(os.TempDir()))
+	if tmp != "" && (norm == tmp || strings.HasPrefix(norm, tmp+string(filepath.Separator))) {
+		return true
+	}
+	return strings.Contains(norm, string(filepath.Separator)+"go-build")
+}
+
+func detectDevRepoRoot(exeDir string) string {
+	clean := filepath.Clean(exeDir)
+	if strings.EqualFold(filepath.Base(clean), "bin") {
+		parent := filepath.Dir(clean)
+		if strings.EqualFold(filepath.Base(parent), "build") {
+			repoRoot := filepath.Dir(parent)
+			if info, err := os.Stat(filepath.Join(repoRoot, WailsConfig)); err == nil && !info.IsDir() {
+				return repoRoot
+			}
+		}
+	}
+	return ""
+}
+
+func isDirWritable(dir string) bool {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return false
+	}
+	f, err := os.CreateTemp(dir, ".tdeck-write-check-*")
+	if err != nil {
+		return false
+	}
+	name := f.Name()
+	_ = f.Close()
+	_ = os.Remove(name)
+	return true
+}
+
+func migrateLegacyAppDataIfNeeded(baseDir string) {
+	if strings.TrimSpace(baseDir) == "" {
+		return
+	}
+	targetDB := filepath.Join(baseDir, DatabaseFileName)
+	if _, err := os.Stat(targetDB); err == nil {
+		return
+	}
+	cfgDir, err := os.UserConfigDir()
+	if err != nil || strings.TrimSpace(cfgDir) == "" {
+		return
+	}
+	legacyDir := filepath.Join(cfgDir, AppName)
+	if strings.EqualFold(filepath.Clean(legacyDir), filepath.Clean(baseDir)) {
+		return
+	}
+	legacyDB := filepath.Join(legacyDir, DatabaseFileName)
+	if _, err := os.Stat(legacyDB); err != nil {
+		return
+	}
+
+	for _, name := range []string{DatabaseFileName, DatabaseFileName + "-wal", DatabaseFileName + "-shm", SettingsFileName, EnvFile} {
+		src := filepath.Join(legacyDir, name)
+		dst := filepath.Join(baseDir, name)
+		if _, err := os.Stat(dst); err == nil {
+			continue
+		}
+		if info, err := os.Stat(src); err == nil && !info.IsDir() {
+			perm := os.FileMode(0o644)
+			if name == EnvFile || name == SettingsFileName {
+				perm = 0o600
+			}
+			_ = copyFileForMigration(src, dst, perm)
+		}
+	}
+
+	legacyThumbs := filepath.Join(legacyDir, ThumbnailsDirName)
+	targetThumbs := filepath.Join(baseDir, ThumbnailsDirName)
+	if entries, err := os.ReadDir(legacyThumbs); err == nil {
+		_ = os.MkdirAll(targetThumbs, 0o755)
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			src := filepath.Join(legacyThumbs, entry.Name())
+			dst := filepath.Join(targetThumbs, entry.Name())
+			if _, err := os.Stat(dst); err == nil {
+				continue
+			}
+			_ = copyFileForMigration(src, dst, 0o644)
+		}
+	}
+}
+
+func copyFileForMigration(src, dst string, perm os.FileMode) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, perm)
+	if err != nil {
+		return err
+	}
+	_, copyErr := io.Copy(out, in)
+	closeErr := out.Close()
+	if copyErr != nil {
+		_ = os.Remove(dst)
+		return copyErr
+	}
+	return closeErr
+}
+
+// NewSettingsManager creates a SettingsManager rooted at the installation directory (or customDir if non-empty).
 func NewSettingsManager(customDir string) (*SettingsManager, error) {
 	isCustom := strings.TrimSpace(customDir) != ""
 	base := strings.TrimSpace(customDir)
 	if !isCustom {
-		cfgDir, err := os.UserConfigDir()
+		resolved, err := ResolveDefaultDataDir()
 		if err != nil {
 			return nil, err
 		}
-		base = filepath.Join(cfgDir, AppName)
+		base = resolved
 	}
 	if err := os.MkdirAll(base, 0o755); err != nil {
 		return nil, err
+	}
+	if !isCustom {
+		migrateLegacyAppDataIfNeeded(base)
 	}
 	thumbDir := filepath.Join(base, ThumbnailsDirName)
 	if err := os.MkdirAll(thumbDir, 0o755); err != nil {
@@ -93,6 +253,11 @@ func (m *SettingsManager) ThumbnailsDir() string {
 	return filepath.Join(m.baseDir, ThumbnailsDirName)
 }
 
+// DefaultAppsDir returns the default directory inside the installation folder for downloaded desktop apps.
+func (m *SettingsManager) DefaultAppsDir() string {
+	return filepath.Join(m.baseDir, DefaultAppsDirName)
+}
+
 // ThumbnailPath returns the local PNG file path for a project's thumbnail.
 func (m *SettingsManager) ThumbnailPath(projectID string) string {
 	return filepath.Join(m.ThumbnailsDir(), projectID+".png")
@@ -133,12 +298,23 @@ func (m *SettingsManager) Load() (Settings, error) {
 	if m.useEnvFile {
 		applyEnvOverrides(&settings)
 	}
-	return normalizeSettings(settings), nil
+	normalized := normalizeSettings(settings)
+	if strings.TrimSpace(normalized.AppsDir) == "" {
+		normalized.AppsDir = m.DefaultAppsDir()
+	} else if !filepath.IsAbs(normalized.AppsDir) {
+		normalized.AppsDir = filepath.Clean(filepath.Join(m.baseDir, normalized.AppsDir))
+	}
+	return normalized, nil
 }
 
 // Save writes non-secret configuration to settings.json and persists secrets/config to .env.
 func (m *SettingsManager) Save(s Settings) (Settings, error) {
 	normalized := normalizeSettings(s)
+	if strings.TrimSpace(normalized.AppsDir) == "" {
+		normalized.AppsDir = m.DefaultAppsDir()
+	} else if !filepath.IsAbs(normalized.AppsDir) {
+		normalized.AppsDir = filepath.Clean(filepath.Join(m.baseDir, normalized.AppsDir))
+	}
 	if err := os.MkdirAll(m.baseDir, 0o755); err != nil {
 		return Settings{}, err
 	}

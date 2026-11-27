@@ -1,6 +1,7 @@
 package main
 
 import (
+	"runtime"
 	"strings"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -53,13 +54,23 @@ func (a *App) SelectExecutableFile(title string) (string, error) {
 		return "", apperr.NotReady("wails context unavailable")
 	}
 	if strings.TrimSpace(title) == "" {
-		title = "Chọn file thực thi (.exe)"
+		if runtime.GOOS == "windows" {
+			title = "Chọn file thực thi (.exe)"
+		} else {
+			title = "Chọn file thực thi"
+		}
 	}
-	return wailsruntime.OpenFileDialog(a.ctx, wailsruntime.OpenDialogOptions{
-		Title: title,
-		Filters: []wailsruntime.FileFilter{
+	filters := []wailsruntime.FileFilter{
+		{DisplayName: "All Files (*)", Pattern: "*"},
+	}
+	if runtime.GOOS == "windows" {
+		filters = []wailsruntime.FileFilter{
 			{DisplayName: "Executable (*.exe)", Pattern: "*.exe"},
 			{DisplayName: "All Files (*.*)", Pattern: "*.*"},
-		},
+		}
+	}
+	return wailsruntime.OpenFileDialog(a.ctx, wailsruntime.OpenDialogOptions{
+		Title:   title,
+		Filters: filters,
 	})
 }

@@ -1,20 +1,21 @@
 # Tài liệu Cấu hình, Biến môi trường & Chuẩn Manifest (Configuration Reference)
 
-Tài liệu này quy định chi tiết toàn bộ hệ thống cấu hình của **T-Deck**, bao gồm: thư mục dữ liệu người dùng `%APPDATA%\TDeck`, danh sách biến môi trường `.env`, cấu trúc file neo danh tính `.tdeck-meta.json`, chuẩn manifest `.tdeck.json` tại từng dự án và cấu trúc lưu trữ đối tượng trên **Cloudflare R2**.
+Tài liệu này quy định chi tiết toàn bộ hệ thống cấu hình của **T-Deck**, bao gồm: thư mục dữ liệu ngay tại thư mục cài đặt người dùng (`<InstallDir>`), danh sách biến môi trường `.env`, cấu trúc file neo danh tính `.tdeck-meta.json`, chuẩn manifest `.tdeck.json` tại từng dự án và cấu trúc lưu trữ đối tượng trên **Cloudflare R2**.
 
 ---
 
-## 1. Cấu trúc Thư mục Dữ liệu Cục bộ (`%APPDATA%\TDeck`)
+## 1. Cấu trúc Thư mục Dữ liệu Cục bộ (`<InstallDir>`)
 
-Mọi dữ liệu vận hành của T-Deck được lưu trữ độc lập tại `%APPDATA%\TDeck` (tương ứng với `C:\Users\<username>\AppData\Roaming\TDeck` trên Windows):
+Mọi dữ liệu vận hành của T-Deck được lưu trữ mặc định ngay trong **thư mục cài đặt của người dùng** (`<InstallDir>`, có thể ghi đè qua biến môi trường `TDECK_DATA_DIR`; chỉ fallback sang thư mục config hệ điều hành nếu thư mục cài đặt ở chế độ chỉ đọc). Nếu phát hiện dữ liệu cũ tại `%APPDATA%\TDeck`, T-Deck tự động di chuyển sang thư mục cài đặt mới ở lần chạy đầu tiên:
 
 ```text
-%APPDATA%\TDeck\
+<InstallDir>\
 ├── settings.json                 # Cấu hình chung (WorkspaceDirs, AppsDir, R2 non-secret settings)
 ├── .env                          # Lưu riêng khóa bí mật R2 (R2_ACCESS_KEY, R2_SECRET_KEY) với quyền 0600
 ├── tdeck.db                      # Cơ sở dữ liệu SQLite chính (chế độ WAL + FTS5)
 ├── tdeck.db-wal                  # Write-Ahead Log của SQLite
 ├── tdeck.db-shm                  # Shared Memory của SQLite
+├── apps\                         # Thư mục mặc định giải nén các ứng dụng Desktop tải từ R2
 └── thumbnails\
     ├── <project-uuid>.png        # Ảnh poster đại diện 16:9 (1280×720 PNG)
     └── <project-uuid>.icon.png   # Huy hiệu App Icon vuông (128×128 PNG, chỉ sinh khi dự án có bộ icon)
@@ -28,8 +29,9 @@ T-Deck đọc cấu hình theo thứ tự ưu tiên: **Biến môi trường h�
 
 | Biến môi trường | Khóa trong `settings.json` | Mặc định | Mô tả chi tiết |
 |---|---|---|---|
-| `TDECK_WORKSPACE_DIRS` | `workspace_dirs` | `["D:\\"]` | Danh sách thư mục gốc để quét dự án (trong `.env` phân tách bằng `;` hoặc `,`). |
-| `TDECK_APPS_DIR` | `apps_dir` | `C:\TDeckApps` | Thư mục đích khi cài đặt các ứng dụng Desktop tải từ Cloudflare R2 về máy. |
+| `TDECK_DATA_DIR` | *(Thư mục gốc dữ liệu)* | `<InstallDir>` | Tùy chọn ghi đè thư mục lưu `tdeck.db`, `settings.json`, `.env`, `thumbnails/`. |
+| `TDECK_WORKSPACE_DIRS` | `workspace_dirs` | `[]` | Danh sách thư mục gốc để quét dự án (trong `.env` phân tách bằng `;` hoặc `,`). |
+| `TDECK_APPS_DIR` | `apps_dir` | `<InstallDir>/apps` | Thư mục đích khi cài đặt các ứng dụng Desktop tải từ Cloudflare R2 về máy. |
 | `TDECK_SCAN_RECENT_DAYS` | `scan_recent_days` | `120` | Chỉ quét các dự án có thay đổi trong $N$ ngày gần nhất (`0` = quét toàn bộ). |
 | `TDECK_SCAN_EXCLUDE_DIRS` | `scan_exclude_dirs` | `[]` | Danh sách tên thư mục loại trừ bổ sung khi quét (phân tách bằng `,`). |
 | `R2_ENABLED` | `r2.enabled` | `false` | Bật/tắt tính năng đồng bộ và phát hành qua Cloudflare R2 (`true` / `false`). |

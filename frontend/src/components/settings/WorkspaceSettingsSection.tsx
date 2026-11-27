@@ -128,7 +128,7 @@ export function WorkspaceSettingsSection({
             onChange={(e) =>
               onChange((prev) => ({ ...prev, apps_dir: e.target.value }))
             }
-            placeholder="VD: C:\TDeckApps"
+            placeholder="Mặc định: <Thư mục cài đặt>\apps (VD: D:\T-Deck\apps)"
             className={UI_MONO_INPUT_CLS}
           />
           <button

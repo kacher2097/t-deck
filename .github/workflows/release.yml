@@ -1,0 +1,114 @@
+name: Release Multi-Platform (Windows & Linux)
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install Wails CLI & NSIS
+        run: |
+          go install github.com/wailsapp/wails/v2/cmd/wails@v2.11.0
+          choco install nsis -y
+      - name: Install Frontend Dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Build Windows Installer & Portable
+        shell: pwsh
+        run: |
+          ./scripts/package-releases.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tdeck-windows-amd64
+          path: |
+            build/release/TDeck-windows-amd64-installer.exe
+            build/release/TDeck-windows-amd64-portable.zip
+
+  build-linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install GTK3, WebKit2GTK & Wails CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev build-essential pkg-config dpkg
+          go install github.com/wailsapp/wails/v2/cmd/wails@v2.11.0
+      - name: Build Frontend & Native Linux Binaries
+        run: |
+          cd frontend && npm ci && npm run build && cd ..
+          wails build -s -tags webkit2_41 -platform linux/amd64
+          go build -trimpath -ldflags "-s -w" -o build/bin/tdeck-sync ./cmd/tdeck-sync
+      - name: Package Linux Tarball, Self-Extracting Installer (.run) & .deb
+        run: |
+          mkdir -p build/release
+          STAGE=$(mktemp -d)
+          PKG_DIR="$STAGE/t-deck-linux-amd64"
+          mkdir -p "$PKG_DIR"
+          cp build/bin/TDeck "$PKG_DIR/TDeck"
+          cp build/bin/tdeck-sync "$PKG_DIR/tdeck-sync"
+          cp build/linux/install.sh "$PKG_DIR/install.sh"
+          cp build/linux/uninstall.sh "$PKG_DIR/uninstall.sh"
+          cp build/linux/t-deck.desktop "$PKG_DIR/t-deck.desktop"
+          cp build/appicon.png "$PKG_DIR/t-deck.png"
+          cp .env.example README.md CHANGELOG.md "$PKG_DIR/"
+          chmod +x "$PKG_DIR/TDeck" "$PKG_DIR/tdeck-sync" "$PKG_DIR/install.sh" "$PKG_DIR/uninstall.sh"
+
+          tar -czf build/release/TDeck-linux-amd64.tar.gz -C "$STAGE" t-deck-linux-amd64
+
+          cat > build/release/TDeck-linux-amd64-installer.run <<'STUB'
+          #!/usr/bin/env sh
+          set -eu
+          TMP_DIR=$(mktemp -d 2>/dev/null || mktemp -d -t tdeck-install)
+          trap 'rm -rf "$TMP_DIR"' EXIT INT TERM
+          ARCHIVE_LINE=$(awk '/^__ARCHIVE_BELOW__$/ {print NR + 1; exit 0;}' "$0")
+          tail -n +"$ARCHIVE_LINE" "$0" | tar -xz -C "$TMP_DIR"
+          exec bash "$TMP_DIR/t-deck-linux-amd64/install.sh" "$@"
+          __ARCHIVE_BELOW__
+          STUB
+          sed -i 's/^          //' build/release/TDeck-linux-amd64-installer.run
+          cat build/release/TDeck-linux-amd64.tar.gz >> build/release/TDeck-linux-amd64-installer.run
+          chmod +x build/release/TDeck-linux-amd64-installer.run
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tdeck-linux-amd64
+          path: |
+            build/release/TDeck-linux-amd64.tar.gz
+            build/release/TDeck-linux-amd64-installer.run
+
+  publish-release:
+    needs: [build-windows, build-linux]
+    runs-on: ubuntu-24.04
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Generate Checksums
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS.txt
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+

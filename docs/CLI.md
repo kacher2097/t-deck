@@ -6,7 +6,7 @@ Bên cạnh giao diện đồ họa `TDeck.exe`, dự án cung cấp 2 công c�
 
 ## 1. Công cụ Đồng bộ & Phát hành Hàng loạt (`cmd/tdeck-sync`)
 
-`tdeck-sync` sử dụng chung cơ sở dữ liệu SQLite (`%APPDATA%\TDeck\tdeck.db`), cấu hình `settings.json` / `.env` và bộ quét `internal/scanner` với ứng dụng GUI.
+`tdeck-sync` sử dụng chung cơ sở dữ liệu SQLite (`<InstallDir>\tdeck.db`), cấu hình `settings.json` / `.env` và bộ quét `internal/scanner` với ứng dụng GUI.
 
 ### 1.1. Cú pháp & Danh sách Cờ (Flags)
 
@@ -72,4 +72,5 @@ Script [build.bat](file:///d:/app/t-deck/build.bat) ở thư mục gốc giúp b
 | `.\build.bat clean` | **Clean Build toàn diện**: Chạy lại `npm install`, build mới Frontend và gọi `wails build -clean` để xóa sạch bộ đệm build cũ. |
 | `.\build.bat fe` | **Chỉ kiểm tra & build Frontend**: Chạy `tsc && vite build` để kiểm tra lỗi kiểu TypeScript và xuất gói tĩnh ra `frontend\dist`. |
 | `.\build.bat installer` | **Đóng gói Bộ cài đặt Windows (NSIS)**: Build Frontend + Go và gọi `makensis.exe` để xuất bộ cài `build\bin\TDeck-amd64-installer.exe`. |
+| `.\build.bat release` | **Đóng gói Phát hành Đa nền tảng**: Xuất trọn bộ Windows Installer (`.exe`), Windows Portable (`.zip`), Linux Installer (`.run`), Linux Tarball (`.tar.gz`) và `SHA256SUMS.txt` vào `build\release\`. |
 

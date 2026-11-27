@@ -3,11 +3,12 @@ package config
 // System file names, directories, and R2 object key prefixes.
 // All system identifiers are centralized here to avoid hardcoded literals.
 const (
-	AppName           = "TDeck"
-	AppDisplayName    = "T-Deck"
-	SettingsFileName  = "settings.json"
-	DatabaseFileName  = "tdeck.db"
-	ThumbnailsDirName = "thumbnails"
+	AppName            = "TDeck"
+	AppDisplayName     = "T-Deck"
+	SettingsFileName   = "settings.json"
+	DatabaseFileName   = "tdeck.db"
+	ThumbnailsDirName  = "thumbnails"
+	DefaultAppsDirName = "apps"
 
 	MetaFileName   = ".tdeck-meta.json"
 	DefaultBatFile = "start.bat"
@@ -38,6 +39,7 @@ const (
 
 // Environment variable keys externalizing all config, API keys, and secrets.
 const (
+	EnvKeyDataDir         = "TDECK_DATA_DIR"
 	EnvKeyWorkspaceDirs   = "TDECK_WORKSPACE_DIRS"
 	EnvKeyAppsDir         = "TDECK_APPS_DIR"
 	EnvKeyScanRecentDays  = "TDECK_SCAN_RECENT_DAYS"
@@ -86,6 +88,8 @@ const (
 var IgnoredDirs = []string{
 	"node_modules",
 	".git",
+	"thumbnails",
+	".tdeck-data",
 	"target",
 	"vendor",
 	".venv",

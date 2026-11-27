@@ -9,6 +9,7 @@ settings.json.*
 .tdeck-data/
 .tdeck-meta.json
 thumbnails/
+/apps/
 staging/
 backups/
 *.__bak/
@@ -35,6 +36,7 @@ coverage.*
 
 # Wails & Go build artifacts
 build/bin/
+build/release/
 build/windows/installer/*.exe
 frontend/package.json.md5
 frontend/wailsjs/
