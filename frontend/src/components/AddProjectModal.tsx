@@ -327,6 +327,8 @@ export function AddProjectModal({
                 <div className="grid grid-cols-2 gap-2">
                   <input
                     type="text"
+                    name="hybridBatFile"
+                    aria-label="Script khởi chạy (.bat)"
                     value={batFile}
                     onChange={(e) => setBatFile(e.target.value)}
                     placeholder="start.bat"
@@ -334,6 +336,8 @@ export function AddProjectModal({
                   />
                   <input
                     type="text"
+                    name="hybridExeName"
+                    aria-label="File thực thi (.exe)"
                     value={exeName}
                     onChange={(e) => setExeName(e.target.value)}
                     placeholder="MyApp.exe"

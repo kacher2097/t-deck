@@ -72,11 +72,10 @@ export function CatalogToolbar({
         )}
         {selectedCategory !== "all" && (
           <FilterChip
-            label={`Nhóm: ${
-              selectedCategory === "__uncategorized__"
+            label={`Nhóm: ${selectedCategory === "__uncategorized__"
                 ? "Chưa phân nhóm"
                 : selectedCategory
-            }`}
+              }`}
             onClear={onClearCategory}
           />
         )}
@@ -104,10 +103,12 @@ export function CatalogToolbar({
             Sắp xếp:
           </span>
           <select
+            id="catalog-sort-by"
+            name="sortBy"
             aria-label="Sắp xếp dự án"
             value={sortBy}
             onChange={(e) => onSortByChange(e.target.value as ProjectSortBy)}
-            className="h-8 px-2.5 rounded-md bg-canvas border border-edge text-[13px] font-medium text-primary focus:outline-none focus:border-muted transition-colors"
+            className="h-8 px-2.5 rounded-md bg-canvas border border-edge text-[13px] font-medium text-primary focus:outline-none focus:border-white/50 focus:ring-2 focus:ring-white/10 transition-[border-color,box-shadow]"
           >
             <option value="name_asc">Tên dự án (A → Z)</option>
             <option value="name_desc">Tên dự án (Z → A)</option>

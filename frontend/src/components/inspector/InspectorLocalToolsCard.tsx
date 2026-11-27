@@ -145,6 +145,8 @@ export function InspectorLocalToolsCard({
               </div>
               <div className="flex items-center gap-2 min-w-0">
                 <select
+                  name="batTemplate"
+                  aria-label="Mẫu script khởi chạy"
                   value={selectedTpl}
                   onChange={(e) => onSelectTpl(e.target.value)}
                   className={`${UI_SELECT_CLS} flex-1 min-w-0 bg-surface`}

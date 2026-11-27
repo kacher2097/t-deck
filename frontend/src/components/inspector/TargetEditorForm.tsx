@@ -30,12 +30,16 @@ export function TargetEditorForm({
       <div className="grid grid-cols-2 gap-2 min-w-0">
         <input
           type="text"
+          name="targetName"
+          aria-label="Tên target"
           value={target.name}
           onChange={(e) => onChange({ ...target, name: e.target.value })}
           placeholder="Tên target"
           className={UI_INPUT_CLS}
         />
         <select
+          name="targetDistribution"
+          aria-label="Hình thức phân phối"
           value={target.distribution}
           onChange={(e) => onChange({ ...target, distribution: e.target.value })}
           className={UI_SELECT_CLS}
@@ -58,6 +62,8 @@ export function TargetEditorForm({
         <>
           <input
             type="url"
+            name="targetProdUrl"
+            aria-label="Production URL"
             value={target.prod_url || ""}
             onChange={(e) => onChange({ ...target, prod_url: e.target.value })}
             placeholder="Production URL (https://...)"
@@ -66,6 +72,8 @@ export function TargetEditorForm({
           <div className="grid grid-cols-2 gap-2">
             <input
               type="url"
+              name="targetStagingUrl"
+              aria-label="Staging URL"
               value={target.staging_url || ""}
               onChange={(e) =>
                 onChange({ ...target, staging_url: e.target.value })
@@ -75,6 +83,8 @@ export function TargetEditorForm({
             />
             <input
               type="text"
+              name="targetHostingProvider"
+              aria-label="Nhà cung cấp Hosting"
               value={target.hosting_provider || ""}
               onChange={(e) =>
                 onChange({ ...target, hosting_provider: e.target.value })
@@ -86,6 +96,8 @@ export function TargetEditorForm({
           <div className="grid grid-cols-2 gap-2">
             <input
               type="url"
+              name="targetHealthUrl"
+              aria-label="Health Check URL"
               value={target.health_url || ""}
               onChange={(e) =>
                 onChange({ ...target, health_url: e.target.value })
@@ -95,6 +107,8 @@ export function TargetEditorForm({
             />
             <input
               type="url"
+              name="targetVersionUrl"
+              aria-label="Version Endpoint URL"
               value={target.version_url || ""}
               onChange={(e) =>
                 onChange({ ...target, version_url: e.target.value })
@@ -109,6 +123,8 @@ export function TargetEditorForm({
       <div className="grid grid-cols-2 gap-2">
         <input
           type="text"
+          name="targetSubpath"
+          aria-label="Thư mục con (Subpath)"
           value={target.subpath || ""}
           onChange={(e) => onChange({ ...target, subpath: e.target.value })}
           placeholder="Subpath (VD: frontend)"
@@ -116,6 +132,8 @@ export function TargetEditorForm({
         />
         <input
           type="text"
+          name="targetArtifactGlob"
+          aria-label="Đường dẫn Artifact"
           value={target.artifact_glob || ""}
           onChange={(e) =>
             onChange({ ...target, artifact_glob: e.target.value })
@@ -127,6 +145,8 @@ export function TargetEditorForm({
 
       <input
         type="text"
+        name="targetBuildCmd"
+        aria-label="Lệnh Build"
         value={target.build_cmd || ""}
         onChange={(e) => onChange({ ...target, build_cmd: e.target.value })}
         placeholder="Build Cmd (VD: npm run build hoặc wails build -clean)"

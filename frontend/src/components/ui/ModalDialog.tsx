@@ -77,7 +77,7 @@ export function ModalDialog({
           onClose();
         }
       }}
-      className={`tdeck-dialog ${SIZE_CLASSES[size]} ${fixedHeight ? "h-[780px] max-h-[88vh]" : "max-h-[88vh]"} rounded-lg bg-surface border border-edge text-primary p-0 shadow-none overflow-hidden open:flex open:flex-col`}
+      className={`tdeck-dialog ${SIZE_CLASSES[size]} ${fixedHeight ? "h-[780px] max-h-[88vh]" : "max-h-[88vh]"} rounded-xl bg-surface border border-white/10 text-primary p-0 overflow-hidden open:flex open:flex-col`}
     >
       <div className="px-7 py-4 border-b border-edge flex items-center justify-between gap-4 shrink-0">
         <div className="min-w-0 flex-1">

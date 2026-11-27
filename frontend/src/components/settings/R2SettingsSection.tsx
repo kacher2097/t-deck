@@ -42,8 +42,13 @@ export function R2SettingsSection({ r2, onChange }: R2SettingsSectionProps) {
             Đồng bộ catalog.json, thumbnails & releases (API key/secret lưu tại .env)
           </p>
         </div>
-        <label className="flex items-center gap-2 text-[13px] font-medium text-primary cursor-pointer">
+        <label
+          htmlFor="r2-sync-enabled"
+          className="flex items-center gap-2 text-[13px] font-medium text-primary cursor-pointer"
+        >
           <input
+            id="r2-sync-enabled"
+            name="r2Enabled"
             type="checkbox"
             checked={r2.enabled}
             onChange={(e) =>

@@ -126,6 +126,8 @@ export function App() {
         searchInputRef={filters.searchInputRef}
         viewMode={filters.viewMode}
         onViewModeChange={filters.handleViewModeChange}
+        sidebarCollapsed={filters.sidebarCollapsed}
+        onToggleSidebar={filters.toggleSidebar}
         scanning={hub.scanning}
         syncing={hub.syncing}
         checkingHealth={hub.checkingHealth}
@@ -139,6 +141,7 @@ export function App() {
 
       <div className="flex-1 flex min-h-0 overflow-hidden">
         <SidebarNav
+          collapsed={filters.sidebarCollapsed}
           queryMatchedProjects={hub.queryMatchedProjects}
           categories={hub.categories}
           selectedType={filters.selectedType}

@@ -65,11 +65,13 @@ export function SidebarCategorySection({
         <form onSubmit={handleAddCategory} className="flex items-center gap-1.5">
           <input
             type="text"
+            name="newSidebarCategory"
+            aria-label="Tên nhóm mới"
             autoFocus
             value={newCatName}
             onChange={(e) => setNewCatName(e.target.value)}
             placeholder="Tên nhóm mới..."
-            className="flex-1 min-w-0 h-8 px-2.5 rounded-md bg-canvas border border-edge text-[13px] text-primary placeholder:text-muted/70 focus:outline-none focus:border-muted"
+            className="flex-1 min-w-0 h-8 px-2.5 rounded-md bg-canvas border border-edge text-[13px] text-primary placeholder:text-muted/70 focus:outline-none focus:border-white/50 focus:ring-2 focus:ring-white/10"
           />
           <button
             type="submit"
@@ -97,7 +99,7 @@ export function SidebarCategorySection({
           type="button"
           onClick={() => onSelectCategory("all")}
           className={`w-full px-2.5 py-1.5 rounded-md text-[13px] flex items-center justify-between gap-2 transition-colors ${selectedCategory === "all"
-              ? "bg-elevated text-primary font-medium border border-edge"
+              ? "bg-white/[0.08] text-white font-medium border border-white/15"
               : "text-muted hover:text-primary hover:bg-elevated/60 border border-transparent"
             }`}
         >
@@ -116,8 +118,10 @@ export function SidebarCategorySection({
             <div
               key={cat.id}
               className={`group px-2.5 py-1.5 rounded-md flex items-center justify-between gap-2 transition-colors ${active
-                  ? "bg-elevated text-primary font-medium border border-edge"
-                  : "text-muted hover:text-primary hover:bg-elevated/60 border border-transparent"
+                  ? "bg-white/[0.08] text-white font-medium border border-white/15"
+                  : count === 0
+                    ? "text-muted/45 hover:text-primary hover:bg-elevated/60 border border-transparent"
+                    : "text-muted hover:text-primary hover:bg-elevated/60 border border-transparent"
                 }`}
             >
               <button
@@ -177,8 +181,10 @@ export function SidebarCategorySection({
               )
             }
             className={`w-full px-2.5 py-1.5 rounded-md text-[13px] flex items-center justify-between gap-2 transition-colors ${selectedCategory === "__uncategorized__"
-                ? "bg-elevated text-primary font-medium border border-edge"
-                : "text-muted hover:text-primary hover:bg-elevated/60 border border-transparent"
+                ? "bg-white/[0.08] text-white font-medium border border-white/15"
+                : uncategorizedCount === 0
+                  ? "text-muted/45 hover:text-primary hover:bg-elevated/60 border border-transparent"
+                  : "text-muted hover:text-primary hover:bg-elevated/60 border border-transparent"
               }`}
           >
             <span className="truncate pl-6">Chưa phân nhóm</span>

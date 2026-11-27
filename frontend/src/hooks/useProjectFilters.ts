@@ -35,8 +35,28 @@ export function useProjectFilters() {
     }
   });
 
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("tdeck_sidebar_collapsed") === "1";
+    } catch {
+      return false;
+    }
+  });
+
   const searchInputRef = useRef<HTMLInputElement>(null);
   const hasActiveQuery = Boolean(debouncedQuery.trim());
+
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("tdeck_sidebar_collapsed", next ? "1" : "0");
+      } catch {
+        // ignore storage quota errors
+      }
+      return next;
+    });
+  }, []);
 
   const handleViewModeChange = useCallback((mode: "grid" | "matrix") => {
     setViewMode(mode);
@@ -84,11 +104,14 @@ export function useProjectFilters() {
         e.preventDefault();
         searchInputRef.current?.focus();
         searchInputRef.current?.select();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        toggleSidebar();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [toggleSidebar]);
 
   const handleTagClick = useCallback((tag: string) => {
     setSelectedTag((prev) =>
@@ -122,6 +145,7 @@ export function useProjectFilters() {
     debouncedQuery,
     hasActiveQuery,
     sortBy,
+    sidebarCollapsed,
     searchInputRef,
     setSelectedType,
     setSelectedCategory,
@@ -130,6 +154,7 @@ export function useProjectFilters() {
     setSelectedQuickFilter,
     setQuery,
     setIsComposing,
+    toggleSidebar,
     handleViewModeChange,
     handleSortByChange,
     handleSearchCommit,

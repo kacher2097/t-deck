@@ -6,7 +6,6 @@ import {
   Link2,
   RefreshCw,
   SlidersHorizontal,
-  Square,
   Trash2,
 } from "lucide-react";
 import type {
@@ -69,7 +68,9 @@ export function ReleaseMatrixRow({
   const firstPort = running?.ports?.[0];
   const statusMeta = PROJECT_STATUS_META[p.status] ?? PROJECT_STATUS_META.ready;
 
-  const rowBg = isSelected ? "bg-elevated" : "bg-surface group-hover:bg-elevated";
+  const rowBg = isSelected
+    ? "bg-white/[0.08]"
+    : "bg-surface group-hover:bg-[#191C24]";
 
   const hasWebTarget = Boolean(webTarget || p.live_url);
   const hasDeskInfo = Boolean(
@@ -167,19 +168,19 @@ export function ReleaseMatrixRow({
         className={`py-2.5 px-3 min-w-[140px] max-w-[210px] border-b border-edge transition-colors ${rowBg}`}
       >
         <div className="space-y-1 min-w-0">
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-canvas border border-edge text-[11px] font-mono">
+          <span
+            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10.5px] font-mono font-semibold ${
+              isRunning
+                ? "bg-status-ready/15 border border-status-ready/50 text-[#34D399]"
+                : statusMeta.pillClass
+            }`}
+          >
             <span
               className={`w-1.5 h-1.5 rounded-full shrink-0 ${
                 isRunning ? "bg-status-ready animate-pulse" : statusMeta.dotClass
               }`}
             />
-            <span
-              className={
-                isRunning
-                  ? "text-status-ready font-semibold"
-                  : statusMeta.textClass
-              }
-            >
+            <span>
               {isRunning
                 ? firstPort
                   ? `RUNNING :${firstPort}`
@@ -276,35 +277,15 @@ export function ReleaseMatrixRow({
         <div className="inline-flex items-center justify-end gap-1.5 shrink-0">
           <ProjectPrimaryActionButton
             project={p}
+            runningProc={running}
             isBusy={isBusy}
             size="table"
             onLaunch={onLaunch}
             onHydrate={onHydrate}
             onSelect={onSelect}
+            onOpenLocalPort={onOpenLocalPort}
+            onStopProcess={onStopProcess}
           />
-
-          {isRunning && firstPort && onOpenLocalPort && (
-            <button
-              type="button"
-              onClick={() => onOpenLocalPort(firstPort)}
-              title={`Mở http://localhost:${firstPort}`}
-              className="h-8 px-2.5 shrink-0 whitespace-nowrap rounded-md border border-status-ready/50 bg-status-ready/10 hover:bg-status-ready/20 text-status-ready text-xs font-mono font-semibold inline-flex items-center transition-colors"
-            >
-              :{firstPort}
-            </button>
-          )}
-
-          {isRunning && (
-            <button
-              type="button"
-              onClick={() => onStopProcess(p)}
-              title="Dừng tiến trình đang chạy"
-              aria-label="Dừng tiến trình"
-              className="h-8 w-8 shrink-0 rounded-md border border-status-danger/60 bg-status-danger/10 text-status-danger hover:bg-status-danger/20 inline-flex items-center justify-center transition-colors"
-            >
-              <Square className="w-3.5 h-3.5 fill-current" />
-            </button>
-          )}
 
           {p.has_update && (
             <button

@@ -178,6 +178,8 @@ export function InspectorMetadataForm({
               <div className="flex items-center gap-1.5 min-w-0">
                 <input
                   type="text"
+                  name="newCategoryName"
+                  aria-label="Tên nhóm mới"
                   autoFocus
                   value={newCatName}
                   onChange={(e) => setNewCatName(e.target.value)}
@@ -278,6 +280,8 @@ export function InspectorMetadataForm({
           ))}
           <input
             type="text"
+            name="tagInput"
+            aria-label="Thêm tag mới"
             value={tagInput}
             onChange={(e) => setTagInput(e.target.value)}
             onKeyDown={handleAddTag}
@@ -334,6 +338,8 @@ export function InspectorMetadataForm({
               <div className="grid grid-cols-2 gap-2">
                 <input
                   type="text"
+                  name="hybridBatFile"
+                  aria-label="Script khởi chạy (.bat)"
                   value={batFile}
                   onChange={(e) => onBatFileChange(e.target.value)}
                   placeholder="start.bat"
@@ -341,6 +347,8 @@ export function InspectorMetadataForm({
                 />
                 <input
                   type="text"
+                  name="hybridExeName"
+                  aria-label="File thực thi (.exe)"
                   value={exeName}
                   onChange={(e) => onExeNameChange(e.target.value)}
                   placeholder="MyApp.exe"

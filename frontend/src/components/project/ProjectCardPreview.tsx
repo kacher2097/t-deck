@@ -61,69 +61,62 @@ export function ProjectCardPreview({
       <input
         ref={fileInputRef}
         type="file"
+        name="thumbnailUpload"
+        aria-label={`Tải ảnh preview cho ${project.name}`}
         accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"
         onChange={handleFileChange}
         className="hidden"
       />
       <div
-        tabIndex={0}
-        role="button"
-        aria-label={`Ảnh preview ${project.name}. Kéo thả ảnh, chọn file hoặc click và nhấn Ctrl+V`}
-        onClick={(e) => e.currentTarget.focus()}
-        onDoubleClick={onOpenDetail}
         onDragOver={(e) => {
           e.preventDefault();
           setDragging(true);
         }}
         onDragLeave={() => setDragging(false)}
         onDrop={handleDrop}
-        className={`relative aspect-video bg-canvas border-b overflow-hidden focus:outline-none focus:ring-1 focus:ring-inset focus:ring-accent/70 cursor-pointer shrink-0 ${
-          dragging ? "border-accent bg-elevated/60" : "border-edge"
+        className={`relative aspect-video bg-canvas border-b overflow-hidden shrink-0 ${
+          dragging ? "border-white/70 bg-elevated/60" : "border-edge"
         }`}
       >
-        {project.thumbnail_url ? (
-          <img
-            src={project.thumbnail_url}
-            alt={project.name}
-            loading="lazy"
-            decoding="async"
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-muted/80 px-4 text-center">
-            <ImagePlus className="w-5 h-5" />
-            <span className="text-xs">
-              Kéo thả,{" "}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  fileInputRef.current?.click();
-                }}
-                className="underline text-primary hover:text-white"
-              >
-                tải ảnh
-              </button>{" "}
-              hoặc Ctrl+V
-            </span>
-          </div>
-        )}
-
         <button
           type="button"
-          title="Tải ảnh từ máy"
-          onClick={(e) => {
-            e.stopPropagation();
-            fileInputRef.current?.click();
-          }}
-          className="absolute bottom-2 right-2 h-7 px-2.5 rounded bg-canvas/90 border border-edge text-xs font-medium text-primary hover:bg-elevated flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+          onClick={onOpenDetail}
+          aria-label={`Mở chi tiết ${project.name}`}
+          className="block w-full h-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/60 cursor-pointer"
         >
-          <Upload className="w-3 h-3" />
-          <span>Tải ảnh</span>
+          {project.thumbnail_url ? (
+            <img
+              src={project.thumbnail_url}
+              alt={project.name}
+              loading="lazy"
+              decoding="async"
+              className="w-full h-full object-cover select-none"
+            />
+          ) : (
+            <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-muted/80 px-4 text-center">
+              <ImagePlus className="w-5 h-5" />
+              <span className="text-xs">Kéo thả ảnh hoặc dán Ctrl+V</span>
+            </div>
+          )}
         </button>
 
+        {!project.thumbnail_url && (
+          <button
+            type="button"
+            title="Tải ảnh từ máy"
+            onClick={(e) => {
+              e.stopPropagation();
+              fileInputRef.current?.click();
+            }}
+            className="absolute bottom-2 right-2 z-10 h-7 px-2.5 rounded bg-canvas/90 border border-white/15 text-xs font-medium text-primary hover:bg-elevated hover:border-white/40 flex items-center gap-1.5 opacity-90 hover:opacity-100 transition-colors"
+          >
+            <Upload className="w-3 h-3" />
+            <span>Tải ảnh</span>
+          </button>
+        )}
+
         {uploading && (
-          <div className="absolute inset-0 bg-canvas/85 flex items-center justify-center gap-2 text-xs text-primary">
+          <div className="absolute inset-0 z-20 bg-canvas/85 flex items-center justify-center gap-2 text-xs text-primary">
             <Loader2 className="w-4 h-4 animate-spin text-status-ready" />
             <span>Đang lưu ảnh...</span>
           </div>
