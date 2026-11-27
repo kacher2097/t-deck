@@ -1,7 +1,9 @@
 package fsutil
 
 import (
+	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -57,5 +59,35 @@ func UniqueStrings(items []string) []string {
 		out = append(out, trimmed)
 	}
 	return out
+}
+
+// ResolveSafeSubpath resolves relPath inside baseDir and rejects any path escaping baseDir.
+func ResolveSafeSubpath(baseDir, relPath string) (string, error) {
+	baseTrimmed := strings.TrimSpace(baseDir)
+	if baseTrimmed == "" || baseTrimmed == "." {
+		return "", fmt.Errorf("thư mục gốc không hợp lệ")
+	}
+	baseClean := filepath.Clean(baseTrimmed)
+	rel := strings.TrimSpace(relPath)
+	if rel == "" {
+		return baseClean, nil
+	}
+	if strings.ContainsRune(rel, '\x00') {
+		return "", fmt.Errorf("đường dẫn chứa ký tự không hợp lệ")
+	}
+	var candidate string
+	if filepath.IsAbs(rel) {
+		candidate = filepath.Clean(rel)
+	} else {
+		candidate = filepath.Clean(filepath.Join(baseClean, rel))
+	}
+	if !strings.EqualFold(filepath.VolumeName(baseClean), filepath.VolumeName(candidate)) {
+		return "", fmt.Errorf("đường dẫn vượt ra ngoài ổ đĩa gốc: %s", relPath)
+	}
+	relCheck, err := filepath.Rel(baseClean, candidate)
+	if err != nil || relCheck == ".." || strings.HasPrefix(relCheck, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("đường dẫn vượt ra ngoài thư mục gốc: %s", relPath)
+	}
+	return candidate, nil
 }
 

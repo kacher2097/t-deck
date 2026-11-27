@@ -47,19 +47,31 @@ func UpdateDesktopRelease(
 	}
 
 	view, _ := repo.GetProject(projectID)
+	safeSlug := fsutil.Slugify(p.Slug)
+	if safeSlug == "" {
+		safeSlug = "app"
+	}
 	installDir := strings.TrimSpace(view.LocalDir)
 	if installDir == "" {
 		if strings.TrimSpace(settings.AppsDir) == "" {
 			return model.ProjectView{}, apperr.Validation("chưa cấu hình thư mục Apps (apps_dir) trong Settings")
 		}
-		installDir = filepath.Join(settings.AppsDir, p.Slug)
+		var subErr error
+		installDir, subErr = fsutil.ResolveSafeSubpath(settings.AppsDir, safeSlug)
+		if subErr != nil {
+			return model.ProjectView{}, apperr.Validation(subErr.Error())
+		}
 	}
 
 	if p.ExeName != "" && isWindowsProcessRunning(filepath.Base(p.ExeName)) {
 		return model.ProjectView{}, apperr.Conflict(fmt.Sprintf("ứng dụng %s đang chạy; vui lòng đóng trước khi cập nhật", filepath.Base(p.ExeName)))
 	}
 
-	tmpArtifact := filepath.Join(os.TempDir(), fmt.Sprintf("tdeck-upd-%s-%d%s", p.Slug, time.Now().UnixNano(), filepath.Ext(rel.R2Key)))
+	ext := filepath.Ext(filepath.Base(rel.R2Key))
+	if ext == "" || strings.ContainsAny(ext, `/\.`) && len(ext) > 16 {
+		ext = ".zip"
+	}
+	tmpArtifact := filepath.Join(os.TempDir(), fmt.Sprintf("tdeck-upd-%s-%d%s", safeSlug, time.Now().UnixNano(), ext))
 	defer os.Remove(tmpArtifact)
 
 	if err := store.DownloadFile(ctx, rel.R2Key, tmpArtifact); err != nil {
@@ -77,7 +89,14 @@ func UpdateDesktopRelease(
 		if err := os.MkdirAll(installDir, 0o755); err != nil {
 			return model.ProjectView{}, apperr.IO("tạo thư mục cài đặt thất bại", err)
 		}
-		dstExe := filepath.Join(installDir, firstNonEmptyStr(rel.FileName, filepath.Base(rel.R2Key)))
+		exeBase := filepath.Base(strings.TrimSpace(firstNonEmptyStr(rel.FileName, filepath.Base(rel.R2Key))))
+		if exeBase == "" || exeBase == "." || exeBase == ".." {
+			return model.ProjectView{}, apperr.Validation("tên file cài đặt không hợp lệ")
+		}
+		dstExe, subErr := fsutil.ResolveSafeSubpath(installDir, exeBase)
+		if subErr != nil {
+			return model.ProjectView{}, apperr.Validation(subErr.Error())
+		}
 		if err := copyFileSimple(tmpArtifact, dstExe); err != nil {
 			return model.ProjectView{}, apperr.IO("sao chép file cài đặt thất bại", err)
 		}

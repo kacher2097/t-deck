@@ -3,6 +3,7 @@ package cloud
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -17,6 +18,15 @@ import (
 var (
 	sharedHealthClient = &http.Client{
 		Timeout: 5 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 5 {
+				return errors.New("quá nhiều lần chuyển hướng (tối đa 5)")
+			}
+			if !isSafeHTTPURL(req.URL.String()) {
+				return errors.New("chuyển hướng tới URL không hợp lệ")
+			}
+			return nil
+		},
 	}
 	reMetaAppVersion = regexp.MustCompile(`(?i)<meta[^>]+name=["']app-version["'][^>]+content=["']([^"']+)["']`)
 )

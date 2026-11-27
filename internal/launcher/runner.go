@@ -142,8 +142,19 @@ func (r *Runner) launchWeb(p model.ProjectView) (model.LaunchResult, error) {
 		}, nil
 	}
 
+	batPath, batErr := fsutil.ResolveSafeSubpath(p.LocalDir, batName)
+	if batErr != nil {
+		return model.LaunchResult{}, fmt.Errorf("launch %s: %w", batName, batErr)
+	}
+	if !fsutil.FileExists(batPath) {
+		return model.LaunchResult{
+			ProjectID: p.ID,
+			Status:    config.LaunchStatusMissingBat,
+			Message:   fmt.Sprintf("Không tìm thấy file %s trong thư mục dự án.", batName),
+		}, nil
+	}
 	winTitle := "T-Deck - " + sanitizeConsoleTitle(p.Name)
-	if pid, err := r.startTracked(p.LocalDir, "cmd.exe", "/C", "start", winTitle, "/D", p.LocalDir, "cmd.exe", "/K", batName); err != nil {
+	if pid, err := r.startConsoleTracked(p.LocalDir, batPath, winTitle); err != nil {
 		return model.LaunchResult{}, fmt.Errorf("launch %s: %w", batName, err)
 	} else if pid > 0 && r.monitor != nil {
 		r.monitor.Track(p.ID, pid, batName)
@@ -166,16 +177,22 @@ func (r *Runner) launchDesktop(p model.ProjectView) (model.LaunchResult, error) 
 	if exePath == "" {
 		// Fallback: if desktop project has a startup .bat script (e.g. start-studio-app.bat), run it.
 		if batName := findExistingBat(p.LocalDir); batName != "" {
+			batPath, batErr := fsutil.ResolveSafeSubpath(p.LocalDir, batName)
+			if batErr != nil {
+				return model.LaunchResult{}, fmt.Errorf("launch %s: %w", batName, batErr)
+			}
 			winTitle := "T-Deck - " + sanitizeConsoleTitle(p.Name)
-			if err := r.starter.Start(p.LocalDir, "cmd.exe", "/C", "start", winTitle, "/D", p.LocalDir, "cmd.exe", "/K", batName); err != nil {
+			if pid, err := r.startConsoleTracked(p.LocalDir, batPath, winTitle); err != nil {
 				return model.LaunchResult{}, fmt.Errorf("launch %s: %w", batName, err)
+			} else if pid > 0 && r.monitor != nil {
+				r.monitor.Track(p.ID, pid, batName)
 			}
 			_ = r.repo.TouchLastOpened(p.ID)
 			return model.LaunchResult{
 				ProjectID:  p.ID,
 				Status:     config.LaunchStatusLaunched,
 				Message:    fmt.Sprintf("Đã khởi chạy %s", batName),
-				OpenedFile: filepath.Join(p.LocalDir, batName),
+				OpenedFile: batPath,
 			}, nil
 		}
 
@@ -213,6 +230,27 @@ func (r *Runner) startTracked(dir string, name string, args ...string) (int, err
 		return startWithPID(dir, name, args...)
 	}
 	return 0, r.starter.Start(dir, name, args...)
+}
+
+func (r *Runner) startConsoleTracked(dir, batPath, winTitle string) (int, error) {
+	batBase := filepath.Base(batPath)
+	if strings.ContainsAny(batBase, "&|<>^\"\r\n") {
+		return 0, fmt.Errorf("tên script chứa ký tự không hợp lệ: %s", batBase)
+	}
+	workDir := filepath.Dir(batPath)
+	if _, isOS := r.starter.(osProcessStarter); !isOS {
+		return 0, r.starter.Start(dir, "cmd.exe", "/C", "start", winTitle, "/D", workDir, "cmd.exe", "/K", batBase)
+	}
+	cmd := exec.Command("cmd.exe", "/K", batBase)
+	cmd.Dir = workDir
+	openNewConsoleWindow(cmd)
+	if err := cmd.Start(); err != nil {
+		return 0, err
+	}
+	if cmd.Process != nil {
+		return cmd.Process.Pid, nil
+	}
+	return 0, nil
 }
 
 func resolveOrGenerateWebBat(localDir, configuredBat, projectName string) (string, string) {
@@ -278,8 +316,7 @@ func resolveDesktopExePath(localDir, exeName string) string {
 		if filepath.IsAbs(trimmed) && fsutil.FileExists(trimmed) {
 			return trimmed
 		}
-		direct := filepath.Join(localDir, trimmed)
-		if fsutil.FileExists(direct) {
+		if direct, err := fsutil.ResolveSafeSubpath(localDir, trimmed); err == nil && fsutil.FileExists(direct) {
 			return direct
 		}
 	}

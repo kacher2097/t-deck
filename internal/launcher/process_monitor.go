@@ -163,7 +163,19 @@ func (pm *ProcessMonitor) pollOnce() {
 	}
 	pm.mu.Unlock()
 
-	livePIDs := queryWindowsPIDs()
+	parentByPID := queryProcessParentMap()
+	var livePIDs map[int]bool
+	var childrenByPID map[int][]int
+	if parentByPID != nil {
+		childrenByPID = make(map[int][]int, len(parentByPID))
+		for pid, ppid := range parentByPID {
+			if ppid > 0 && ppid != pid {
+				childrenByPID[ppid] = append(childrenByPID[ppid], pid)
+			}
+		}
+	} else {
+		livePIDs = queryWindowsPIDs()
+	}
 	portsByPID := queryListeningPortsByPID()
 
 	var events []model.RunningProcess
@@ -173,12 +185,20 @@ func (pm *ProcessMonitor) pollOnce() {
 		if !stillTracked {
 			continue
 		}
-		if len(livePIDs) > 0 && !livePIDs[snap.pid] {
+		alive := true
+		if parentByPID != nil {
+			if len(parentByPID) > 0 {
+				_, alive = parentByPID[snap.pid]
+			}
+		} else if len(livePIDs) > 0 {
+			alive = livePIDs[snap.pid]
+		}
+		if !alive {
 			delete(pm.tracked, pidKey)
 			events = append(events, model.RunningProcess{ProjectID: pidKey, PID: 0, Ports: []int{}})
 			continue
 		}
-		newPorts := portsByPID[snap.pid]
+		newPorts := collectTreeListeningPorts(snap.pid, childrenByPID, portsByPID)
 		if !intSlicesEqual(cur.ports, newPorts) {
 			cur.ports = append([]int(nil), newPorts...)
 			events = append(events, model.RunningProcess{
@@ -281,4 +301,40 @@ func intSlicesEqual(a, b []int) bool {
 		}
 	}
 	return true
+}
+
+func collectTreeListeningPorts(rootPID int, childrenByPID map[int][]int, portsByPID map[int][]int) []int {
+	if rootPID <= 0 || len(portsByPID) == 0 {
+		return nil
+	}
+	if len(childrenByPID) == 0 {
+		return append([]int(nil), portsByPID[rootPID]...)
+	}
+
+	queue := []int{rootPID}
+	visited := map[int]bool{rootPID: true}
+	portSet := make(map[int]struct{})
+
+	for len(queue) > 0 {
+		pid := queue[0]
+		queue = queue[1:]
+		for _, p := range portsByPID[pid] {
+			portSet[p] = struct{}{}
+		}
+		for _, child := range childrenByPID[pid] {
+			if !visited[child] {
+				visited[child] = true
+				queue = append(queue, child)
+			}
+		}
+	}
+	if len(portSet) == 0 {
+		return nil
+	}
+	out := make([]int, 0, len(portSet))
+	for p := range portSet {
+		out = append(out, p)
+	}
+	sort.Ints(out)
+	return out
 }

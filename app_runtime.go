@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -14,6 +13,7 @@ import (
 
 	"t-deck/internal/apperr"
 	"t-deck/internal/cloud"
+	"t-deck/internal/fsutil"
 	"t-deck/internal/launcher"
 	"t-deck/internal/media"
 	"t-deck/internal/model"
@@ -227,9 +227,10 @@ func (a *App) BuildAndPublishTarget(req model.BuildPublishRequest) (string, erro
 		}()
 
 		emitStatus("running", "")
-		workDir := view.LocalDir
-		if strings.TrimSpace(tgt.Subpath) != "" {
-			workDir = filepath.Join(view.LocalDir, tgt.Subpath)
+		workDir, subErr := fsutil.ResolveSafeSubpath(view.LocalDir, tgt.Subpath)
+		if subErr != nil {
+			emitStatus("failed", "subpath không hợp lệ: "+subErr.Error())
+			return
 		}
 		if strings.TrimSpace(tgt.BuildCmd) != "" {
 			emitLog("stdout", "$ "+tgt.BuildCmd)

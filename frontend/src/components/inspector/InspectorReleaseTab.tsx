@@ -1,6 +1,6 @@
 import { Globe, Laptop } from "lucide-react";
 import type React from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useReleaseBuildJob } from "../../hooks/useReleaseBuildJob";
 import { api, formatError } from "../../lib/api";
 import type {
@@ -48,36 +48,43 @@ export function InspectorReleaseTab({
   const [copiedKey, setCopiedKey] = useState("");
   const [suggestingNotes, setSuggestingNotes] = useState(false);
 
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const activeTarget: ProjectTarget | undefined =
     targets.find((t) => t.id === selectedTargetId) || targets[0];
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     const first = project.targets?.[0];
     setSelectedTargetId(first?.id || "");
     setHealth(null);
-  }, [project.id]);
-
-  useEffect(() => {
     setSourcePath(project.local_dir || "");
     setVersion(project.latest_version || "v1.0.0");
     setChangelog(project.release_notes || "");
-    if (activeTarget) {
-      setDeployUrl(activeTarget.prod_url || "");
-      if (activeTarget.kind === "web") {
-        setAssetKind(
-          activeTarget.distribution === "static_zip"
-            ? "static_zip"
-            : "external_url"
-        );
-      } else {
-        setAssetKind(
-          activeTarget.distribution === "installer"
-            ? "installer_exe"
-            : "portable_zip"
-        );
-      }
+  }, [project.id]);
+
+  useEffect(() => {
+    if (!activeTarget) return;
+    setDeployUrl(activeTarget.prod_url || "");
+    if (activeTarget.kind === "web") {
+      setAssetKind(
+        activeTarget.distribution === "static_zip"
+          ? "static_zip"
+          : "external_url"
+      );
+    } else {
+      setAssetKind(
+        activeTarget.distribution === "installer"
+          ? "installer_exe"
+          : "portable_zip"
+      );
     }
-  }, [project, activeTarget?.id]);
+  }, [project.id, activeTarget?.id]);
 
   const loadHistory = useCallback(async () => {
     setLoadingRels(true);
@@ -107,7 +114,8 @@ export function InspectorReleaseTab({
     try {
       await navigator.clipboard.writeText(text);
       setCopiedKey(key);
-      setTimeout(() => setCopiedKey(""), 1500);
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = setTimeout(() => setCopiedKey(""), 1500);
       onNotify("success", `Đã sao chép ${label}.`);
     } catch {
       onNotify("error", "Không thể truy cập clipboard.");

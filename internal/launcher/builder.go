@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"t-deck/internal/fsutil"
 )
 
 // SuggestChangelog reads git commit history since the latest tag (or last 15 commits) to prefill release notes.
@@ -107,15 +109,30 @@ func ResolveArtifactGlob(baseDir, pattern string) (string, error) {
 	if pat == "" {
 		return "", errors.New("artifact pattern trống")
 	}
+	isRel := !filepath.IsAbs(pat)
 	fullPat := pat
-	if !filepath.IsAbs(fullPat) {
+	if isRel {
 		fullPat = filepath.Join(baseDir, pat)
 	}
 	matches, err := filepath.Glob(fullPat)
 	if err != nil {
 		return "", fmt.Errorf("invalid glob %q: %w", pat, err)
 	}
+	if isRel && len(matches) > 0 {
+		safeMatches := make([]string, 0, len(matches))
+		for _, m := range matches {
+			if _, safeErr := fsutil.ResolveSafeSubpath(baseDir, m); safeErr == nil {
+				safeMatches = append(safeMatches, m)
+			}
+		}
+		matches = safeMatches
+	}
 	if len(matches) == 0 {
+		if isRel {
+			if _, safeErr := fsutil.ResolveSafeSubpath(baseDir, fullPat); safeErr != nil {
+				return "", safeErr
+			}
+		}
 		// Direct stat fallback if pattern has no wildcards or path exists literally.
 		if _, statErr := os.Stat(fullPat); statErr == nil {
 			return fullPat, nil

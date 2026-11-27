@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"t-deck/internal/config"
+	"t-deck/internal/fsutil"
 )
 
 // ProjectManifest represents the declarative .tdeck.json config inside a project root.
@@ -66,8 +67,10 @@ func LoadProjectManifest(projectDir string) (*ProjectManifest, bool, error) {
 // ResolveProjectVersion detects a project's version from wails.json, package.json, git tags, or fallback "v0.1.0".
 func ResolveProjectVersion(projectDir string, src *ManifestVersionSource) string {
 	if src != nil && strings.TrimSpace(src.File) != "" {
-		if v := readVersionFromJSONFile(filepath.Join(projectDir, src.File), src.JSONPath); v != "" {
-			return ensureVPrefix(v)
+		if safePath, err := fsutil.ResolveSafeSubpath(projectDir, src.File); err == nil && safePath != filepath.Clean(projectDir) {
+			if v := readVersionFromJSONFile(safePath, src.JSONPath); v != "" {
+				return ensureVPrefix(v)
+			}
 		}
 	}
 

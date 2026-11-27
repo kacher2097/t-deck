@@ -101,6 +101,7 @@ func SyncCatalogWithR2(ctx context.Context, store ObjectStore, repo ProjectStore
 					return report, err
 				}
 				_ = os.Remove(filepath.Join(thumbnailsDir, remoteProj.ID+".png"))
+				_ = os.Remove(filepath.Join(thumbnailsDir, remoteProj.ID+".icon.png"))
 				mergedMap[id] = remoteProj
 				report.UpdatedLocal++
 				continue

@@ -3,6 +3,7 @@ package cloud
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,9 +20,44 @@ import (
 // GitCloner abstracts git clone for testability.
 type GitCloner func(ctx context.Context, remoteURL string, targetDir string) error
 
+func validateSafeGitRemote(remoteURL string) error {
+	u := strings.TrimSpace(remoteURL)
+	if u == "" {
+		return fmt.Errorf("Git Remote URL không được để trống")
+	}
+	if strings.HasPrefix(u, "-") {
+		return fmt.Errorf("Git Remote URL không hợp lệ (bắt đầu bằng '-')")
+	}
+	if strings.ContainsAny(u, "\r\n\x00") || strings.Contains(u, "::") {
+		return fmt.Errorf("Git Remote URL chứa giao thức hoặc ký tự không được phép")
+	}
+	// Accept SCP-style SSH (e.g. git@github.com:org/repo.git)
+	if strings.HasPrefix(u, "git@") {
+		rest := strings.TrimPrefix(u, "git@")
+		host, path, ok := strings.Cut(rest, ":")
+		if ok && host != "" && path != "" && !strings.ContainsAny(host, "/\\ \t") && !strings.ContainsAny(path, " \t") {
+			return nil
+		}
+		return fmt.Errorf("Git SSH URL không hợp lệ")
+	}
+	parsed, err := url.Parse(u)
+	if err != nil || parsed.Host == "" {
+		return fmt.Errorf("Git Remote URL không hợp lệ: %s", u)
+	}
+	switch strings.ToLower(parsed.Scheme) {
+	case "https", "http", "ssh", "git":
+		return nil
+	default:
+		return fmt.Errorf("scheme Git Remote không được hỗ trợ (%s)", parsed.Scheme)
+	}
+}
+
 // DefaultGitClone invokes `git clone` into targetDir without flashing a console window.
 func DefaultGitClone(ctx context.Context, remoteURL string, targetDir string) error {
-	cmd := exec.CommandContext(ctx, "git", "clone", remoteURL, targetDir)
+	if err := validateSafeGitRemote(remoteURL); err != nil {
+		return apperr.Validation(err.Error())
+	}
+	cmd := exec.CommandContext(ctx, "git", "clone", "--", strings.TrimSpace(remoteURL), targetDir)
 	hideCloudCmdWindow(cmd)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -67,8 +103,15 @@ func hydrateDesktop(
 		return model.ProjectView{}, apperr.NotFound("dự án chưa có bản release nào trên R2")
 	}
 
-	targetDir := filepath.Join(settings.AppsDir, p.Slug)
-	tmpZipPath := filepath.Join(os.TempDir(), fmt.Sprintf("hydrate-%s-%d.zip", p.Slug, time.Now().UnixNano()))
+	safeSlug := fsutil.Slugify(p.Slug)
+	if safeSlug == "" {
+		return model.ProjectView{}, apperr.Validation("slug dự án không hợp lệ")
+	}
+	targetDir, err := fsutil.ResolveSafeSubpath(settings.AppsDir, safeSlug)
+	if err != nil || targetDir == filepath.Clean(settings.AppsDir) {
+		return model.ProjectView{}, apperr.Validation("đường dẫn cài đặt không hợp lệ")
+	}
+	tmpZipPath := filepath.Join(os.TempDir(), fmt.Sprintf("hydrate-%s-%d.zip", safeSlug, time.Now().UnixNano()))
 	defer os.Remove(tmpZipPath)
 
 	if err := store.DownloadFile(ctx, p.R2ReleaseKey, tmpZipPath); err != nil {
@@ -134,7 +177,14 @@ func hydrateWeb(
 		cloner = DefaultGitClone
 	}
 
-	targetDir := filepath.Join(settings.WorkspaceDirs[0], p.Slug)
+	safeSlug := fsutil.Slugify(p.Slug)
+	if safeSlug == "" {
+		return model.ProjectView{}, apperr.Validation("slug dự án không hợp lệ")
+	}
+	targetDir, err := fsutil.ResolveSafeSubpath(settings.WorkspaceDirs[0], safeSlug)
+	if err != nil || targetDir == filepath.Clean(settings.WorkspaceDirs[0]) {
+		return model.ProjectView{}, apperr.Validation("đường dẫn workspace đích không hợp lệ")
+	}
 	if _, err := os.Stat(targetDir); err == nil {
 		return model.ProjectView{}, apperr.Conflict(fmt.Sprintf("thư mục đích đã tồn tại: %s", targetDir))
 	}

@@ -265,7 +265,8 @@ func (r *ProjectRepo) listProjectsRaw(includeDeleted bool) ([]model.Project, err
 func (r *ProjectRepo) ListAllLocalStates() (map[string]model.LocalState, error) {
 	rows, err := r.db.Query(`
 		SELECT project_id, local_dir, status, last_opened_at,
-		       COALESCE(has_env, 0), COALESCE(has_env_example, 0), COALESCE(has_bat, 0), COALESCE(flags_checked_at, 0)
+		       COALESCE(has_env, 0), COALESCE(has_env_example, 0), COALESCE(has_bat, 0), COALESCE(flags_checked_at, 0),
+		       COALESCE(installed_version, ''), COALESCE(installed_release_id, ''), COALESCE(installed_at, 0)
 		FROM local_state
 	`)
 	if err != nil {
@@ -277,7 +278,11 @@ func (r *ProjectRepo) ListAllLocalStates() (map[string]model.LocalState, error) 
 	for rows.Next() {
 		var st model.LocalState
 		var hasEnv, hasEnvEx, hasBat int
-		if err := rows.Scan(&st.ProjectID, &st.LocalDir, &st.Status, &st.LastOpenedAt, &hasEnv, &hasEnvEx, &hasBat, &st.FlagsCheckedAt); err != nil {
+		if err := rows.Scan(
+			&st.ProjectID, &st.LocalDir, &st.Status, &st.LastOpenedAt,
+			&hasEnv, &hasEnvEx, &hasBat, &st.FlagsCheckedAt,
+			&st.InstalledVersion, &st.InstalledReleaseID, &st.InstalledAt,
+		); err != nil {
 			return nil, err
 		}
 		st.HasEnv = hasEnv != 0
@@ -425,8 +430,12 @@ func (r *ProjectRepo) UpsertLocalState(st model.LocalState) error {
 		checkedAt = time.Now().Unix()
 	}
 	_, err := r.db.Exec(`
-		INSERT INTO local_state (project_id, local_dir, status, last_opened_at, has_env, has_env_example, has_bat, flags_checked_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO local_state (
+			project_id, local_dir, status, last_opened_at,
+			has_env, has_env_example, has_bat, flags_checked_at,
+			installed_version, installed_release_id, installed_at
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(project_id) DO UPDATE SET
 			local_dir = excluded.local_dir,
 			status = excluded.status,
@@ -437,8 +446,20 @@ func (r *ProjectRepo) UpsertLocalState(st model.LocalState) error {
 			has_env = excluded.has_env,
 			has_env_example = excluded.has_env_example,
 			has_bat = excluded.has_bat,
-			flags_checked_at = excluded.flags_checked_at
-	`, st.ProjectID, st.LocalDir, st.Status, st.LastOpenedAt, boolToInt(hasEnv), boolToInt(hasEnvEx), boolToInt(hasBat), checkedAt)
+			flags_checked_at = excluded.flags_checked_at,
+			installed_version = CASE
+				WHEN excluded.installed_version != '' THEN excluded.installed_version
+				ELSE local_state.installed_version
+			END,
+			installed_release_id = CASE
+				WHEN excluded.installed_release_id != '' THEN excluded.installed_release_id
+				ELSE local_state.installed_release_id
+			END,
+			installed_at = CASE
+				WHEN excluded.installed_at > local_state.installed_at THEN excluded.installed_at
+				ELSE local_state.installed_at
+			END
+	`, st.ProjectID, st.LocalDir, st.Status, st.LastOpenedAt, boolToInt(hasEnv), boolToInt(hasEnvEx), boolToInt(hasBat), checkedAt, st.InstalledVersion, st.InstalledReleaseID, st.InstalledAt)
 	return err
 }
 
@@ -574,6 +595,7 @@ func (r *ProjectRepo) DeleteProjects(ids []string) (int, error) {
 	}
 	for _, id := range clean {
 		r.MarkThumbnailExists(id, false)
+		r.MarkThumbnailExists(id+".icon", false)
 	}
 	return deleted, nil
 }
@@ -608,6 +630,7 @@ func (r *ProjectRepo) SoftDeleteProjectAt(id string, deletedAt int64) error {
 		return err
 	}
 	r.MarkThumbnailExists(id, false)
+	r.MarkThumbnailExists(id+".icon", false)
 	return nil
 }
 
@@ -641,6 +664,7 @@ func (r *ProjectRepo) PurgeFalsePositiveProject(id string) error {
 		return err
 	}
 	r.MarkThumbnailExists(id, false)
+	r.MarkThumbnailExists(id+".icon", false)
 	return nil
 }
 

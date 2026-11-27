@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -208,15 +209,19 @@ func (a *App) OpenTargetURL(targetID string, env string) error {
 }
 
 func (a *App) makeProgressEmitter(jobID, projectID string) func(stage string, done, total int64) {
+	var mu sync.Mutex
 	lastEmit := time.Time{}
 	return func(stage string, done, total int64) {
 		if a.ctx == nil {
 			return
 		}
+		mu.Lock()
 		if time.Since(lastEmit) < 150*time.Millisecond && done < total {
+			mu.Unlock()
 			return
 		}
 		lastEmit = time.Now()
+		mu.Unlock()
 		pct := 0.0
 		if total > 0 {
 			pct = float64(done) * 100.0 / float64(total)

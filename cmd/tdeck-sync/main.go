@@ -15,6 +15,7 @@ import (
 	"t-deck/internal/cloud"
 	"t-deck/internal/config"
 	"t-deck/internal/database"
+	"t-deck/internal/fsutil"
 	"t-deck/internal/launcher"
 	"t-deck/internal/media"
 	"t-deck/internal/model"
@@ -150,10 +151,12 @@ func main() {
 	}
 
 	var thumbQueue []model.Project
+	localDirByID := make(map[string]string, len(views))
 	for _, v := range views {
 		if *slugFilter != "" && !strings.EqualFold(v.Slug, *slugFilter) {
 			continue
 		}
+		localDirByID[v.ID] = v.LocalDir
 		proj, found, err := repo.GetProjectModel(v.ID)
 		if err != nil || !found {
 			continue
@@ -174,13 +177,13 @@ func main() {
 			_ = repo.UpsertProject(proj, nil)
 		}
 
-		if *genThumbs && (*forceThumbs || v.ThumbnailURL == "") {
+		if *genThumbs && (*forceThumbs || v.ThumbnailURL == "" || (v.IconURL == "" && v.LocalDir != "" && media.HasProjectBrandLogo(v.LocalDir))) {
 			thumbQueue = append(thumbQueue, proj)
 		}
 	}
 
 	if len(thumbQueue) > 0 {
-		generateThumbnailsConcurrent(repo, mgr.ThumbnailsDir(), thumbQueue)
+		generateThumbnailsConcurrent(repo, mgr.ThumbnailsDir(), thumbQueue, localDirByID)
 	}
 
 	views, err = repo.ListProjects(model.ProjectFilter{})
@@ -233,9 +236,10 @@ func main() {
 				continue
 			}
 
-			workDir := v.LocalDir
-			if strings.TrimSpace(tgt.Subpath) != "" {
-				workDir = filepath.Join(v.LocalDir, tgt.Subpath)
+			workDir, subErr := fsutil.ResolveSafeSubpath(v.LocalDir, tgt.Subpath)
+			if subErr != nil {
+				fmt.Printf("Skip publish %s [%s]: %v\n", v.Slug, tgt.Name, subErr)
+				continue
 			}
 			if *runBuild && strings.TrimSpace(tgt.BuildCmd) != "" {
 				fmt.Printf("Building %s [%s]: %s\n", v.Slug, tgt.Name, tgt.BuildCmd)
@@ -292,21 +296,23 @@ func main() {
 }
 
 func resolveTargetArtifact(localDir string, tgt model.ProjectTarget) (string, error) {
-	baseDir := localDir
-	if strings.TrimSpace(tgt.Subpath) != "" {
-		baseDir = filepath.Join(localDir, tgt.Subpath)
+	baseDir, err := fsutil.ResolveSafeSubpath(localDir, tgt.Subpath)
+	if err != nil {
+		return "", err
 	}
 	if strings.TrimSpace(tgt.ArtifactGlob) != "" {
 		return launcher.ResolveArtifactGlob(baseDir, tgt.ArtifactGlob)
 	}
 	if strings.TrimSpace(tgt.LaunchEntry) != "" {
-		candidate := filepath.Join(localDir, tgt.LaunchEntry)
-		if _, err := os.Stat(candidate); err == nil {
-			return candidate, nil
+		if candidate, err := fsutil.ResolveSafeSubpath(localDir, tgt.LaunchEntry); err == nil {
+			if _, statErr := os.Stat(candidate); statErr == nil {
+				return candidate, nil
+			}
 		}
-		candidateSub := filepath.Join(baseDir, tgt.LaunchEntry)
-		if _, err := os.Stat(candidateSub); err == nil {
-			return candidateSub, nil
+		if candidateSub, err := fsutil.ResolveSafeSubpath(baseDir, tgt.LaunchEntry); err == nil {
+			if _, statErr := os.Stat(candidateSub); statErr == nil {
+				return candidateSub, nil
+			}
 		}
 	}
 	return "", fmt.Errorf("no artifact_glob or launch_entry found")
@@ -344,7 +350,7 @@ func emptyDash(s string) string {
 	return s
 }
 
-func generateThumbnailsConcurrent(repo *database.ProjectRepo, thumbsDir string, projects []model.Project) {
+func generateThumbnailsConcurrent(repo *database.ProjectRepo, thumbsDir string, projects []model.Project, localDirByID map[string]string) {
 	if err := os.MkdirAll(thumbsDir, 0o755); err != nil {
 		fmt.Printf("  warning: create thumbnails dir failed: %v\n", err)
 		return
@@ -359,8 +365,9 @@ func generateThumbnailsConcurrent(repo *database.ProjectRepo, thumbsDir string, 
 	}
 
 	type thumbResult struct {
-		proj model.Project
-		err  error
+		proj    model.Project
+		hasIcon bool
+		err     error
 	}
 
 	jobs := make(chan model.Project, len(projects))
@@ -372,12 +379,26 @@ func generateThumbnailsConcurrent(repo *database.ProjectRepo, thumbsDir string, 
 		go func() {
 			defer wg.Done()
 			for proj := range jobs {
-				raw, err := media.RenderProjectThumbnailPNG(proj)
+				brandLogo := media.DiscoverProjectBrandLogo(localDirByID[proj.ID])
+				raw, err := media.RenderProjectThumbnailPNGWithLogo(proj, brandLogo)
 				if err == nil {
 					thumbPath := filepath.Join(thumbsDir, proj.ID+".png")
 					err = os.WriteFile(thumbPath, raw, 0o644)
 				}
-				results <- thumbResult{proj: proj, err: err}
+				iconPath := filepath.Join(thumbsDir, proj.ID+".icon.png")
+				hasIcon := false
+				if err == nil {
+					if brandLogo != nil {
+						if iconBytes, iErr := media.EncodeBrandIconPNG(brandLogo, 128); iErr == nil {
+							if os.WriteFile(iconPath, iconBytes, 0o644) == nil {
+								hasIcon = true
+							}
+						}
+					} else {
+						_ = os.Remove(iconPath)
+					}
+				}
+				results <- thumbResult{proj: proj, hasIcon: hasIcon, err: err}
 			}
 		}()
 	}
@@ -408,6 +429,7 @@ func generateThumbnailsConcurrent(repo *database.ProjectRepo, thumbsDir string, 
 			continue
 		}
 		repo.MarkThumbnailExists(res.proj.ID, true)
+		repo.MarkThumbnailExists(res.proj.ID+".icon", res.hasIcon)
 		okCount++
 	}
 	fmt.Printf("Thumbnails generated: ok=%d failed=%d (workers=%d)\n", okCount, failCount, workers)

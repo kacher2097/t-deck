@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AddProjectModal } from "./components/AddProjectModal";
 import { CatalogEmptyState } from "./components/CatalogEmptyState";
 import { CatalogToolbar } from "./components/CatalogToolbar";
@@ -46,6 +46,23 @@ export function App() {
     onRefreshSelectedThumbnail: handleRefreshSelectedThumbnail,
     notify,
   });
+
+  useEffect(() => {
+    if (!selectedProject) return;
+    const fresh = hub.queryMatchedProjects.find(
+      (p) => p.id === selectedProject.id
+    );
+    if (!fresh) return;
+    if (
+      fresh.updated_at !== selectedProject.updated_at ||
+      fresh.thumbnail_url !== selectedProject.thumbnail_url ||
+      fresh.icon_url !== selectedProject.icon_url ||
+      fresh.status !== selectedProject.status ||
+      fresh.installed_version !== selectedProject.installed_version
+    ) {
+      setSelectedProject(fresh);
+    }
+  }, [hub.queryMatchedProjects, selectedProject]);
 
   const filteredProjects = useMemo(
     () =>
