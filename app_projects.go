@@ -245,6 +245,7 @@ func (a *App) DeleteProject(id string, deleteLocalFiles bool) (err error) {
 		return err
 	}
 	_ = os.Remove(a.settingsMgr.ThumbnailPath(id))
+	_ = os.Remove(filepath.Join(a.settingsMgr.ThumbnailsDir(), id+".icon.png"))
 
 	if !deleteLocalFiles && localDir != "" && fsutil.DirExists(localDir) {
 		// Preserve/ensure anchor so Scan Local honors the tombstone and never resurrects this project.
@@ -322,6 +323,7 @@ func (a *App) DeleteProjects(ids []string, deleteLocalFiles bool) (res model.Bul
 
 	for _, v := range readyViews {
 		_ = os.Remove(a.settingsMgr.ThumbnailPath(v.ID))
+		_ = os.Remove(filepath.Join(a.settingsMgr.ThumbnailsDir(), v.ID+".icon.png"))
 		localDir := strings.TrimSpace(v.LocalDir)
 		if !deleteLocalFiles && localDir != "" && fsutil.DirExists(localDir) {
 			if !fsutil.FileExists(filepath.Join(localDir, config.MetaFileName)) {

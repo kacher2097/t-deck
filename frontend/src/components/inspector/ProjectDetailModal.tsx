@@ -63,6 +63,14 @@ export function ProjectDetailModal({
       fixedHeight
       title={
         <>
+          {project.icon_url && (
+            <img
+              src={project.icon_url}
+              alt=""
+              decoding="async"
+              className="w-6 h-6 rounded-md object-cover border border-edge bg-canvas shrink-0"
+            />
+          )}
           <span className="px-2 py-0.5 rounded bg-canvas border border-edge text-xs font-mono font-semibold text-primary">
             {project.type === "web"
               ? "WEB"

@@ -3,15 +3,8 @@ import { useEffect, useState } from "react";
 import { api, formatError } from "../../lib/api";
 import type { ProjectTarget, ProjectView } from "../../types/project";
 import { ConfirmPopover } from "../ui/ConfirmPopover";
-import {
-  UI_BTN_PRIMARY,
-  UI_BTN_SECONDARY,
-  UI_CARD_BOX,
-  UI_INPUT_CLS,
-  UI_MONO_INPUT_CLS,
-  UI_SECTION_TITLE_CLS,
-  UI_SELECT_CLS,
-} from "../ui/uiTokens";
+import { UI_CARD_BOX, UI_SECTION_TITLE_CLS } from "../ui/uiTokens";
+import { TargetEditorForm } from "./TargetEditorForm";
 
 interface TargetListEditorProps {
   project: ProjectView;
@@ -180,168 +173,13 @@ export function TargetListEditor({
       )}
 
       {editingTarget && (
-        <div className="pt-3 border-t border-edge space-y-2.5">
-          <div className="text-xs font-semibold text-primary">
-            {editingTarget.id ? "Sửa Target" : "Thêm Target mới"} (
-            {editingTarget.kind.toUpperCase()})
-          </div>
-          <div className="grid grid-cols-2 gap-2 min-w-0">
-            <input
-              type="text"
-              value={editingTarget.name}
-              onChange={(e) =>
-                setEditingTarget({ ...editingTarget, name: e.target.value })
-              }
-              placeholder="Tên target"
-              className={UI_INPUT_CLS}
-            />
-            <select
-              value={editingTarget.distribution}
-              onChange={(e) =>
-                setEditingTarget({
-                  ...editingTarget,
-                  distribution: e.target.value,
-                })
-              }
-              className={UI_SELECT_CLS}
-            >
-              {editingTarget.kind === "web" ? (
-                <>
-                  <option value="hosted">Hosted URL</option>
-                  <option value="static_zip">Static Zip (R2)</option>
-                </>
-              ) : (
-                <>
-                  <option value="portable">Portable (.zip)</option>
-                  <option value="installer">Installer (.exe)</option>
-                </>
-              )}
-            </select>
-          </div>
-          {editingTarget.kind === "web" && (
-            <>
-              <input
-                type="url"
-                value={editingTarget.prod_url || ""}
-                onChange={(e) =>
-                  setEditingTarget({
-                    ...editingTarget,
-                    prod_url: e.target.value,
-                  })
-                }
-                placeholder="Production URL (https://...)"
-                className={UI_MONO_INPUT_CLS}
-              />
-              <div className="grid grid-cols-2 gap-2">
-                <input
-                  type="url"
-                  value={editingTarget.staging_url || ""}
-                  onChange={(e) =>
-                    setEditingTarget({
-                      ...editingTarget,
-                      staging_url: e.target.value,
-                    })
-                  }
-                  placeholder="Staging URL"
-                  className={UI_MONO_INPUT_CLS}
-                />
-                <input
-                  type="text"
-                  value={editingTarget.hosting_provider || ""}
-                  onChange={(e) =>
-                    setEditingTarget({
-                      ...editingTarget,
-                      hosting_provider: e.target.value,
-                    })
-                  }
-                  placeholder="Hosting (CF Pages, Vercel...)"
-                  className={UI_INPUT_CLS}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <input
-                  type="url"
-                  value={editingTarget.health_url || ""}
-                  onChange={(e) =>
-                    setEditingTarget({
-                      ...editingTarget,
-                      health_url: e.target.value,
-                    })
-                  }
-                  placeholder="Health URL (/health)"
-                  className={UI_MONO_INPUT_CLS}
-                />
-                <input
-                  type="url"
-                  value={editingTarget.version_url || ""}
-                  onChange={(e) =>
-                    setEditingTarget({
-                      ...editingTarget,
-                      version_url: e.target.value,
-                    })
-                  }
-                  placeholder="Version URL (/version.json)"
-                  className={UI_MONO_INPUT_CLS}
-                />
-              </div>
-            </>
-          )}
-          <div className="grid grid-cols-2 gap-2">
-            <input
-              type="text"
-              value={editingTarget.subpath || ""}
-              onChange={(e) =>
-                setEditingTarget({
-                  ...editingTarget,
-                  subpath: e.target.value,
-                })
-              }
-              placeholder="Subpath (VD: frontend)"
-              className={UI_MONO_INPUT_CLS}
-            />
-            <input
-              type="text"
-              value={editingTarget.artifact_glob || ""}
-              onChange={(e) =>
-                setEditingTarget({
-                  ...editingTarget,
-                  artifact_glob: e.target.value,
-                })
-              }
-              placeholder="Artifact (VD: dist hoặc build/bin/*.exe)"
-              className={UI_MONO_INPUT_CLS}
-            />
-          </div>
-          <input
-            type="text"
-            value={editingTarget.build_cmd || ""}
-            onChange={(e) =>
-              setEditingTarget({
-                ...editingTarget,
-                build_cmd: e.target.value,
-              })
-            }
-            placeholder="Build Cmd (VD: npm run build hoặc wails build -clean)"
-            className={UI_MONO_INPUT_CLS}
-          />
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setEditingTarget(null)}
-              className={UI_BTN_SECONDARY}
-            >
-              Hủy
-            </button>
-            <button
-              type="button"
-              disabled={savingTarget}
-              onClick={handleSaveTarget}
-              className={UI_BTN_PRIMARY}
-            >
-              {savingTarget ? "Đang lưu..." : "Lưu Target"}
-            </button>
-          </div>
-        </div>
+        <TargetEditorForm
+          target={editingTarget}
+          saving={savingTarget}
+          onChange={setEditingTarget}
+          onCancel={() => setEditingTarget(null)}
+          onSave={handleSaveTarget}
+        />
       )}
     </div>
   );

@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"image"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -94,7 +95,7 @@ func (s *ThumbnailService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, fullPath)
 }
 
-// GenerateProjectThumbnail synthesizes a 1280x720 thumbnail PNG from project metadata and saves it locally.
+// GenerateProjectThumbnail synthesizes a 960x540 thumbnail PNG from project metadata (and local brand icon suite if present) and saves it locally.
 func (s *ThumbnailService) GenerateProjectThumbnail(projectID string) (string, error) {
 	if s.repo == nil {
 		return "", errors.New("repository not initialized")
@@ -107,11 +108,50 @@ func (s *ThumbnailService) GenerateProjectThumbnail(projectID string) (string, e
 		return "", fmt.Errorf("project %q not found", projectID)
 	}
 
-	raw, err := RenderProjectThumbnailPNG(proj)
+	var localDir string
+	if dirGetter, ok := s.repo.(interface {
+		GetProject(id string) (model.ProjectView, error)
+	}); ok {
+		if view, vErr := dirGetter.GetProject(projectID); vErr == nil {
+			localDir = view.LocalDir
+		}
+	}
+
+	brandLogo := DiscoverProjectBrandLogo(localDir)
+	raw, err := RenderProjectThumbnailPNGWithLogo(proj, brandLogo)
 	if err != nil {
 		return "", fmt.Errorf("render thumbnail: %w", err)
 	}
+
+	s.syncStandaloneBrandIcon(proj.ID, brandLogo)
 	return s.persistThumbnail(proj, raw)
+}
+
+func (s *ThumbnailService) syncStandaloneBrandIcon(projectID string, brandLogo image.Image) {
+	if s.thumbnailsDir == "" || strings.TrimSpace(projectID) == "" {
+		return
+	}
+	iconKey := projectID + ".icon"
+	iconPath := filepath.Join(s.thumbnailsDir, iconKey+".png")
+	marker, hasMarker := s.repo.(interface{ MarkThumbnailExists(string, bool) })
+
+	if brandLogo == nil {
+		_ = os.Remove(iconPath)
+		if hasMarker {
+			marker.MarkThumbnailExists(iconKey, false)
+		}
+		return
+	}
+	iconBytes, err := EncodeBrandIconPNG(brandLogo, 128)
+	if err != nil {
+		return
+	}
+	if err := os.MkdirAll(s.thumbnailsDir, 0o755); err != nil {
+		return
+	}
+	if err := os.WriteFile(iconPath, iconBytes, 0o644); err == nil && hasMarker {
+		marker.MarkThumbnailExists(iconKey, true)
+	}
 }
 
 func (s *ThumbnailService) persistThumbnail(proj model.Project, raw []byte) (string, error) {

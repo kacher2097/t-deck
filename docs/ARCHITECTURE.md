@@ -15,62 +15,71 @@
 
 ## 2. Bản đồ Repository & Trách nhiệm Module
 
-### Cây thư mục thực tế
+### Cây thư mục thực tế (v2.1)
 ```text
 t-deck/
-├── main.go                           # Entry Wails, embed frontend/dist, middleware /thumbnails/*
-├── app.go                            # App struct facade (~25 Wails-bound methods)
+├── main.go                           # Entry Wails (Maximised window), embed frontend/dist, middleware /thumbnails/*
+├── app.go                            # App struct facade & lifecycle hooks
+├── app_projects.go                   # Wails IPC: Project/Category CRUD, thumbnails, Explorer/VS Code/Terminal
+├── app_releases.go                   # Wails IPC: Targets, Build job, Publish R2, Install/Update/Rollback
+├── app_runtime.go                    # Wails IPC: Scan Local (auto brand icon + poster), Sync R2, Health, Process Monitor
+├── app_settings.go                   # Wails IPC: SettingsManager & R2 TestConnection
+├── build.bat                         # Script đóng gói tự động (fast | full | clean | fe | installer)
 ├── wails.json                        # Cấu hình build Wails (output: TDeck.exe)
-├── cmd/tdeck-sync/main.go            # CLI batch scan, auto-thumbnail & publish desktop releases
+├── cmd/tdeck-sync/main.go            # CLI batch scan, auto-thumbnail & publish releases
 ├── internal/
-│   ├── model/project.go              # Domain models: Category, Project, LocalState, ProjectView, Catalog...
+│   ├── apperr/errors.go              # Chuẩn hóa mã lỗi có cấu trúc cho tầng IPC
+│   ├── model/project.go              # Domain models: Category, Project, ProjectTarget, Release, ProjectView, Catalog...
 │   ├── config/
-│   │   ├── constants.go              # Tên file, R2 prefixes, trạng thái, IgnoredDirs, Env keys
+│   │   ├── constants.go              # Tên file, R2 prefixes, trạng thái, IgnoredDirs, ThirdPartyDirs, Env keys
 │   │   ├── settings.go               # SettingsManager (settings.json + .env overrides)
 │   │   └── env_loader.go             # Đọc/ghi .env (giữ secrets ngoài settings.json)
 │   ├── database/
-│   │   ├── sqlite.go                 # Mở SQLite WAL, schemaDDL & migrateColumns
-│   │   ├── project_repo.go           # ProjectRepo CRUD, FTS5 filter query, enrichLocalFlags
+│   │   ├── sqlite.go                 # Mở SQLite WAL, schemaDDL v3 & migrateColumns
+│   │   ├── project_repo.go           # ProjectRepo CRUD, FTS5 filter query, enrichLocalFlags, icon_url cache
 │   │   ├── category_repo.go          # Category CRUD & RenameCategory/DeleteCategory atomic tx
+│   │   ├── release_repo.go           # Quản lý project_targets & lịch sử releases
 │   │   └── fts.go                    # syncFTSTx, buildFTSQuery, normalizeTags
 │   ├── scanner/
-│   │   ├── scanner.go                # Walk workspaceDirs/appsDir, đọc/ghi .tdeck-meta.json, relink
-│   │   ├── detector.go               # Nhận diện stack (Go/Wails, Node/Electron/Vite, Python, Java, Android)
+│   │   ├── scanner.go                # Walk workspaceDirs/appsDir, lọc app bên thứ 3, đọc/ghi .tdeck-meta.json, relink
+│   │   ├── detector.go               # Nhận diện >25 dấu hiệu stack & workspace containers
+│   │   ├── manifest.go               # Đọc/ghi chuẩn .tdeck.json & ResolveProjectVersion
 │   │   ├── metadata.go               # ComputeLocalStatus, CleanMarkdownSummary, parseGitRemote
 │   │   └── env_parser.go             # Tạo .env.example xóa giá trị bí mật sau '='
 │   ├── launcher/
 │   │   ├── runner.go                 # Pre-flight .env guard, chạy .bat/.exe detached, OpenInExplorer/Editor
-│   │   └── templates.go              # 5 mẫu start.bat chuẩn + AutoCreateStartBat
+│   │   ├── templates.go              # 5 mẫu start.bat chuẩn + AutoCreateStartBat
+│   │   ├── process_monitor.go        # Theo dõi cây tiến trình đang chạy & cổng TCP LISTENING
+│   │   ├── health.go                 # Kiểm tra đồng thời HTTP Health & Version Drift cho Web targets
+│   │   └── build_runner.go           # Chạy lệnh build_cmd với luồng log thời gian thực & gợi ý Git Changelog
 │   ├── cloud/
-│   │   ├── r2_client.go              # ObjectStore interface & R2Client (aws-sdk-go-v2 S3)
-│   │   ├── catalog_sync.go           # Sync 2 chiều catalog.json (theo updated_at) & thumbnails
-│   │   ├── release_manager.go        # PublishDesktopRelease & HydrateProjectOnNewPC (desktop/web)
+│   │   ├── r2_client.go              # ObjectStore interface & R2Client (aws-sdk-go-v2 S3 + Multipart + Presigned URL)
+│   │   ├── catalog_sync.go           # Sync 2 chiều catalog.json v2 (projects, categories, targets, tombstones) & thumbnails
+│   │   ├── release_manager.go        # PublishRelease, Atomic Update/Rollback (.bak), latest.json & HydrateProjectOnNewPC
 │   │   └── archive.go                # zipSource & unzipSecure (chống zip-slip)
 │   ├── media/
-│   │   ├── thumbnail.go              # SaveClipboardPNG, ServeHTTP (/thumbnails/<id>.png), Generate
-│   │   └── generator.go              # Render ảnh preview PNG 1280×720 bằng golang.org/x/image
+│   │   ├── thumbnail.go              # SaveClipboardPNG, ServeHTTP (/thumbnails/<id>.png & .icon.png), Generate
+│   │   ├── brand_icon.go             # Tự động dò tìm & giải mã bộ icon thương hiệu (.png / .ico 32-bit BGRA & PNG)
+│   │   └── generator.go              # Render ảnh poster PNG 1280×720 (tự động gắn APP ICON & Hero Emblem khi có logo)
 │   └── fsutil/fs.go                  # FileExists, DirExists, Slugify, UniqueStrings
 └── frontend/src/
-    ├── App.tsx                       # Root state, search debounce, loadQueryMatched + loadFiltered
-    ├── lib/api.ts                    # Typed wrapper gọi window.go.main.App.*
-    ├── lib/clipboard.ts              # Đọc ảnh paste/drop/file và chuyển sang PNG data URL
-    ├── types/project.ts              # Interfaces khớp 1-1 với Go structs
+    ├── App.tsx                       # Root layout orchestrator, keyboard shortcuts & modal wiring
+    ├── hooks/                        # useProjectFilters, useBulkSelection, useRuntimeEvents, useReleaseBuildJob
+    ├── lib/                          # Typed Wails IPC wrapper (api.ts), clipboard image reader, formatters
+    ├── types/project.ts              # Interfaces khớp 1-1 với Go structs (kèm icon_url, targets, releases)
     └── components/
-        ├── TopCommandBar.tsx         # Thanh tìm kiếm Ctrl+K, nút Scan Local, Sync R2, Thêm, Settings
-        ├── SidebarNav.tsx            # Bộ lọc faceted (Nhóm, Môi trường, Trạng thái, #Tags)
-        ├── ProjectCard.tsx           # Card 16:9, drag/drop/paste thumbnail, Launch/Install/Clone
-        ├── AddProjectModal.tsx       # Modal tạo project mới
-        ├── ToastStack.tsx            # Thông báo trạng thái góc phải dưới
-        ├── inspector/
-        │   ├── ProjectDetailModal.tsx # Popup 980px 3 tab (Config / Release / System)
-        │   ├── InspectorConfigTab.tsx # Sửa metadata, tạo start.bat, sync .env.example
-        │   ├── InspectorReleaseTab.tsx # Publish desktop .zip lên R2
-        │   └── InspectorSystemTab.tsx # Copy UUID, mở Explorer/VS Code/Terminal, xóa project
-        ├── settings/
-        │   ├── SettingsModal.tsx     # Lưu SettingsManager
-        │   ├── WorkspaceSettingsSection.tsx # WorkspaceDirs, AppsDir, RecentDays, ExcludeDirs
-        │   └── R2SettingsSection.tsx # Cấu hình R2 + TestConnection
-        └── ui/                       # FormField, ModalDialog (<dialog>), ThumbnailUploader, uiTokens
+        ├── TopCommandBar.tsx         # Thanh tìm kiếm Ctrl+K, View toggle, Health, Scan Local, Sync R2, Thêm, Settings
+        ├── SidebarNav.tsx            # Bộ lọc faceted (Nhóm, Môi trường, Trạng thái, Release & Chạy, #Tags)
+        ├── ProjectCard.tsx           # Card 16:9 kèm App Icon badge, drag/drop/paste thumbnail, Launch/Stop/Install
+        ├── ReleaseMatrixView.tsx     # Bảng đối chiếu phiên bản Local vs R2, trạng thái Web Live & cổng đang mở
+        ├── ReleaseBuildDrawer.tsx    # Ngăn kéo hiển thị trực tiếp luồng build log & tiến trình upload R2
+        ├── ScanLoadingOverlay.tsx    # Hộp thoại tiến trình quét giữa màn hình & Skeleton grid
+        ├── catalog/                  # CatalogToolbar, CatalogEmptyState
+        ├── project/                  # ProjectCardPreview, ProjectPrimaryActionButton, ReleaseMatrixRow
+        ├── sidebar/                  # SidebarCategorySection
+        ├── inspector/                # ProjectDetailModal, InspectorConfigTab, InspectorMetadataForm, InspectorReleaseTab, TargetEditorForm
+        ├── settings/                 # SettingsModal, WorkspaceSettingsSection, R2SettingsSection
+        └── ui/                       # FormField, ModalDialog, ConfirmPopover, ThumbnailUploader, ErrorBoundary, uiTokens
 ```
 
 ---

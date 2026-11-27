@@ -1,13 +1,8 @@
 import { Globe, Laptop } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
+import { useReleaseBuildJob } from "../../hooks/useReleaseBuildJob";
 import { api, formatError } from "../../lib/api";
-import {
-  type BuildLogEvent,
-  type BuildStatusEvent,
-  type ReleaseProgressEvent,
-  subscribeEvent,
-} from "../../lib/events";
 import type {
   ProjectTarget,
   ProjectView,
@@ -52,15 +47,6 @@ export function InspectorReleaseTab({
   const [checkingHealth, setCheckingHealth] = useState(false);
   const [copiedKey, setCopiedKey] = useState("");
   const [suggestingNotes, setSuggestingNotes] = useState(false);
-
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [activeJobId, setActiveJobId] = useState("");
-  const [jobStatus, setJobStatus] = useState<BuildStatusEvent["status"] | null>(
-    null
-  );
-  const [jobError, setJobError] = useState("");
-  const [progress, setProgress] = useState<ReleaseProgressEvent | null>(null);
-  const [buildLogs, setBuildLogs] = useState<BuildLogEvent[]>([]);
 
   const activeTarget: ProjectTarget | undefined =
     targets.find((t) => t.id === selectedTargetId) || targets[0];
@@ -109,40 +95,13 @@ export function InspectorReleaseTab({
     loadHistory();
   }, [loadHistory]);
 
-  useEffect(() => {
-    const unsubProg = subscribeEvent<ReleaseProgressEvent>(
-      "release:progress",
-      (ev) => {
-        if (ev.project_id === project.id) setProgress(ev);
-      }
-    );
-    const unsubLog = subscribeEvent<BuildLogEvent>("build:log", (ev) => {
-      if (ev.project_id === project.id) {
-        setBuildLogs((prev) => [...prev.slice(-200), ev]);
-      }
-    });
-    const unsubStatus = subscribeEvent<BuildStatusEvent>(
-      "build:status",
-      async (ev) => {
-        if (ev.project_id !== project.id) return;
-        setJobStatus(ev.status);
-        setJobError(ev.error || "");
-        if (ev.status === "success") {
-          const fresh = await api.getProjectDetail(project.id);
-          onUpdated(fresh);
-          await loadHistory();
-          onNotify("success", `Build & Publish "${project.name}" hoàn tất.`);
-        } else if (ev.status === "failed") {
-          onNotify("error", ev.error || "Build & Publish thất bại.");
-        }
-      }
-    );
-    return () => {
-      unsubProg();
-      unsubLog();
-      unsubStatus();
-    };
-  }, [project.id, project.name, onUpdated, loadHistory, onNotify]);
+  const buildJob = useReleaseBuildJob({
+    projectId: project.id,
+    projectName: project.name,
+    onUpdated,
+    onReloadHistory: loadHistory,
+    onNotify,
+  });
 
   const copyText = async (key: string, text: string, label: string) => {
     try {
@@ -173,26 +132,13 @@ export function InspectorReleaseTab({
 
   const handleBuildAndPublish = async () => {
     if (!activeTarget) return;
-    setDrawerOpen(true);
-    setBuildLogs([]);
-    setProgress(null);
-    setJobError("");
-    setJobStatus("running");
-    try {
-      const jid = await api.buildAndPublishTarget({
-        project_id: project.id,
-        target_id: activeTarget.id,
-        version,
-        channel,
-        asset_kind: assetKind,
-        changelog,
-      });
-      setActiveJobId(jid);
-    } catch (err) {
-      setJobStatus("failed");
-      setJobError(formatError(err));
-      onNotify("error", formatError(err));
-    }
+    await buildJob.startBuildAndPublish({
+      targetId: activeTarget.id,
+      version,
+      channel,
+      assetKind,
+      changelog,
+    });
   };
 
   const handlePublish = async (e: React.FormEvent) => {
@@ -393,7 +339,7 @@ export function InspectorReleaseTab({
             changelog={changelog}
             publishing={publishing}
             suggestingNotes={suggestingNotes}
-            buildRunning={jobStatus === "running"}
+            buildRunning={buildJob.jobStatus === "running"}
             onVersionChange={setVersion}
             onChannelChange={setChannel}
             onAssetKindChange={setAssetKind}
@@ -406,18 +352,14 @@ export function InspectorReleaseTab({
           />
 
           <BuildLogDrawer
-            open={drawerOpen || jobStatus === "running"}
-            jobId={activeJobId}
-            status={jobStatus}
-            errorMsg={jobError}
-            progress={progress}
-            logs={buildLogs}
-            onCancel={() => {
-              if (activeJobId) {
-                api.cancelActiveJob(activeJobId).catch(() => {});
-              }
-            }}
-            onClose={() => setDrawerOpen(false)}
+            open={buildJob.drawerOpen || buildJob.jobStatus === "running"}
+            jobId={buildJob.activeJobId}
+            status={buildJob.jobStatus}
+            errorMsg={buildJob.jobError}
+            progress={buildJob.progress}
+            logs={buildJob.buildLogs}
+            onCancel={buildJob.cancelBuildJob}
+            onClose={buildJob.closeDrawer}
           />
         </div>
       </div>

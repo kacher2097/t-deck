@@ -1,25 +1,21 @@
 import {
-  AlertTriangle,
   Check,
   Code2,
-  Download,
   FolderOpen,
   Globe,
-  ImagePlus,
-  Loader2,
-  Play,
   SlidersHorizontal,
   Square,
   Trash2,
-  Upload,
 } from "lucide-react";
 import type React from "react";
-import { memo, useRef, useState } from "react";
-import {
-  extractPastedImageAsPNG,
-  imageFileToPNGDataURL,
-} from "../lib/clipboard";
+import { memo } from "react";
+import { extractPastedImageAsPNG } from "../lib/clipboard";
 import type { ProjectView, RunningProcess } from "../types/project";
+import { ProjectCardPreview } from "./project/ProjectCardPreview";
+import {
+  PROJECT_STATUS_META,
+  ProjectPrimaryActionButton,
+} from "./project/ProjectPrimaryActionButton";
 
 interface ProjectCardProps {
   project: ProjectView;
@@ -43,32 +39,6 @@ interface ProjectCardProps {
   onCategoryClick: (category: string) => void;
 }
 
-const STATUS_META: Record<
-  ProjectView["status"],
-  { label: string; dotClass: string; textClass: string }
-> = {
-  ready: {
-    label: "READY",
-    dotClass: "bg-status-ready",
-    textClass: "text-status-ready",
-  },
-  missing_env: {
-    label: "MISSING .ENV",
-    dotClass: "bg-status-warn",
-    textClass: "text-status-warn",
-  },
-  cloud_only: {
-    label: "CLOUD ONLY",
-    dotClass: "bg-status-cloud",
-    textClass: "text-muted",
-  },
-  missing_dir: {
-    label: "MISSING DIR",
-    dotClass: "bg-status-danger",
-    textClass: "text-status-danger",
-  },
-};
-
 export const ProjectCard = memo(function ProjectCard({
   project,
   runningProc,
@@ -90,10 +60,7 @@ export const ProjectCard = memo(function ProjectCard({
   onTagClick,
   onCategoryClick,
 }: ProjectCardProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
-  const [dragging, setDragging] = useState(false);
-  const statusMeta = STATUS_META[project.status] ?? STATUS_META.ready;
+  const statusMeta = PROJECT_STATUS_META[project.status] ?? PROJECT_STATUS_META.ready;
   const isBusy = busyAction === project.id;
   const isRunning = Boolean(runningProc && runningProc.pid > 0);
   const firstPort = runningProc?.ports?.[0];
@@ -101,126 +68,16 @@ export const ProjectCard = memo(function ProjectCard({
   const visibleTags = project.tags?.slice(0, 3) || [];
   const extraTagCount = Math.max(0, (project.tags?.length || 0) - 3);
 
-  const savePNG = async (dataUrl: string) => {
-    setUploading(true);
-    try {
-      await onUploadThumbnail(project, dataUrl);
-    } finally {
-      setUploading(false);
-    }
-  };
-
   const handlePaste = async (e: React.ClipboardEvent) => {
     try {
       const dataUrl = await extractPastedImageAsPNG(e);
       if (!dataUrl) return;
       e.preventDefault();
       e.stopPropagation();
-      await savePNG(dataUrl);
+      await onUploadThumbnail(project, dataUrl);
     } catch (err) {
       onUploadError(err instanceof Error ? err.message : String(err));
     }
-  };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    try {
-      const dataUrl = await imageFileToPNGDataURL(file);
-      await savePNG(dataUrl);
-    } catch (err) {
-      onUploadError(err instanceof Error ? err.message : String(err));
-    }
-  };
-
-  const handleDrop = async (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragging(false);
-    const file = e.dataTransfer.files?.[0];
-    if (!file) return;
-    try {
-      const dataUrl = await imageFileToPNGDataURL(file);
-      await savePNG(dataUrl);
-    } catch (err) {
-      onUploadError(err instanceof Error ? err.message : String(err));
-    }
-  };
-
-  const renderPrimaryButton = () => {
-    if (project.status === "cloud_only") {
-      return (
-        <button
-          type="button"
-          disabled={isBusy}
-          onClick={(e) => {
-            e.stopPropagation();
-            onHydrate(project);
-          }}
-          className="h-8 px-3 shrink-0 whitespace-nowrap rounded-md bg-accent hover:bg-white text-canvas text-[13px] font-semibold flex items-center gap-1.5 disabled:opacity-50 active:scale-[0.98] transition-[background-color,transform] duration-150"
-        >
-          {isBusy ? (
-            <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />
-          ) : (
-            <Download className="w-3.5 h-3.5 shrink-0" />
-          )}
-          <span>{project.type === "desktop" ? "Install" : "Clone"}</span>
-        </button>
-      );
-    }
-
-    if (project.status === "missing_env") {
-      return (
-        <button
-          type="button"
-          disabled={isBusy}
-          onClick={(e) => {
-            e.stopPropagation();
-            onLaunch(project);
-          }}
-          className="h-8 px-2.5 shrink-0 whitespace-nowrap rounded-md border border-status-warn/60 bg-status-warn/15 hover:bg-status-warn/25 text-status-warn text-[12px] font-medium flex items-center gap-1.5 disabled:opacity-50 transition-colors"
-        >
-          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-          <span>Cấu hình .env</span>
-        </button>
-      );
-    }
-
-    if (project.status === "missing_dir") {
-      return (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onSelect(project);
-          }}
-          className="h-8 px-2.5 shrink-0 whitespace-nowrap rounded-md border border-status-danger/60 bg-status-danger/10 hover:bg-status-danger/20 text-status-danger text-[12px] font-medium flex items-center gap-1.5 transition-colors"
-        >
-          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-          <span>Kiểm tra thư mục</span>
-        </button>
-      );
-    }
-
-    return (
-      <button
-        type="button"
-        disabled={isBusy}
-        onClick={(e) => {
-          e.stopPropagation();
-          onLaunch(project);
-        }}
-        className="h-8 px-3 shrink-0 whitespace-nowrap rounded-md bg-accent hover:bg-white text-canvas text-[13px] font-semibold flex items-center gap-1.5 disabled:opacity-50 active:scale-[0.98] transition-[background-color,transform] duration-150"
-      >
-        {isBusy ? (
-          <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />
-        ) : (
-          <Play className="w-3.5 h-3.5 shrink-0 fill-current" />
-        )}
-        <span>{project.type === "web" ? "Run .bat" : "Launch"}</span>
-      </button>
-    );
   };
 
   return (
@@ -232,15 +89,7 @@ export const ProjectCard = memo(function ProjectCard({
           : "border-edge hover:bg-elevated/70 hover:border-muted/40"
       }`}
     >
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/png,image/jpeg,image/webp,image/gif,image/bmp"
-        onChange={handleFileChange}
-        className="hidden"
-      />
-
-      {/* Dedicated Card Header Strip (keeps thumbnail 100% unobstructed) */}
+      {/* Dedicated Card Header Strip */}
       <div className="h-9 px-3 border-b border-edge bg-canvas/50 flex items-center justify-between gap-2 shrink-0 min-w-0">
         <div className="flex items-center gap-1.5 min-w-0">
           {onToggleSelect && (selectionMode || selected) && (
@@ -301,72 +150,12 @@ export const ProjectCard = memo(function ProjectCard({
         </div>
       </div>
 
-      {/* Unobstructed 16:9 Preview Area — Upload file, Drag & Drop, or Click & Ctrl+V */}
-      <div
-        tabIndex={0}
-        role="button"
-        aria-label={`Ảnh preview ${project.name}. Kéo thả ảnh, chọn file hoặc click và nhấn Ctrl+V`}
-        onClick={(e) => e.currentTarget.focus()}
-        onDoubleClick={() => onSelect(project)}
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragging(true);
-        }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={handleDrop}
-        className={`relative aspect-video bg-canvas border-b overflow-hidden focus:outline-none focus:ring-1 focus:ring-inset focus:ring-accent/70 cursor-pointer shrink-0 ${
-          dragging ? "border-accent bg-elevated/60" : "border-edge"
-        }`}
-      >
-        {project.thumbnail_url ? (
-          <img
-            src={project.thumbnail_url}
-            alt={project.name}
-            loading="lazy"
-            decoding="async"
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-muted/80 px-4 text-center">
-            <ImagePlus className="w-5 h-5" />
-            <span className="text-xs">
-              Kéo thả,{" "}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  fileInputRef.current?.click();
-                }}
-                className="underline text-primary hover:text-white"
-              >
-                tải ảnh
-              </button>{" "}
-              hoặc Ctrl+V
-            </span>
-          </div>
-        )}
-
-        {/* Quick Upload Trigger on Hover */}
-        <button
-          type="button"
-          title="Tải ảnh từ máy"
-          onClick={(e) => {
-            e.stopPropagation();
-            fileInputRef.current?.click();
-          }}
-          className="absolute bottom-2 right-2 h-7 px-2.5 rounded bg-canvas/90 border border-edge text-xs font-medium text-primary hover:bg-elevated flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
-        >
-          <Upload className="w-3 h-3" />
-          <span>Tải ảnh</span>
-        </button>
-
-        {uploading && (
-          <div className="absolute inset-0 bg-canvas/85 flex items-center justify-center gap-2 text-xs text-primary">
-            <Loader2 className="w-4 h-4 animate-spin text-status-ready" />
-            <span>Đang lưu ảnh...</span>
-          </div>
-        )}
-      </div>
+      <ProjectCardPreview
+        project={project}
+        onOpenDetail={() => onSelect(project)}
+        onUploadThumbnail={onUploadThumbnail}
+        onUploadError={onUploadError}
+      />
 
       {/* Uniform Card Body */}
       <div
@@ -378,12 +167,23 @@ export const ProjectCard = memo(function ProjectCard({
         className="p-3.5 flex-1 flex flex-col gap-2 cursor-pointer min-w-0"
       >
         <div className="flex items-center justify-between gap-2 min-w-0">
-          <h3
-            title={project.name}
-            className="font-heading text-[15px] font-semibold text-primary leading-snug truncate min-w-0 flex-1"
-          >
-            {project.name}
-          </h3>
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            {project.icon_url && (
+              <img
+                src={project.icon_url}
+                alt=""
+                loading="lazy"
+                decoding="async"
+                className="w-5 h-5 rounded-[5px] object-cover border border-edge bg-canvas shrink-0"
+              />
+            )}
+            <h3
+              title={project.name}
+              className="font-heading text-[15px] font-semibold text-primary leading-snug truncate min-w-0 flex-1"
+            >
+              {project.name}
+            </h3>
+          </div>
           {project.category && (
             <button
               type="button"
@@ -407,7 +207,6 @@ export const ProjectCard = memo(function ProjectCard({
           )}
         </p>
 
-        {/* Single-row Tags (prevents uneven multi-line card heights) */}
         <div className="mt-auto pt-1 h-7 flex items-center gap-1.5 overflow-hidden flex-nowrap">
           {visibleTags.map((tag) => (
             <button
@@ -432,7 +231,15 @@ export const ProjectCard = memo(function ProjectCard({
 
       {/* Overflow-Proof Action Footer */}
       <div className="h-[50px] px-3.5 border-t border-edge bg-canvas/40 flex items-center justify-between gap-2 shrink-0 min-w-0">
-        {renderPrimaryButton()}
+        <ProjectPrimaryActionButton
+          project={project}
+          isBusy={isBusy}
+          stopPropagation
+          size="card"
+          onLaunch={onLaunch}
+          onHydrate={onHydrate}
+          onSelect={onSelect}
+        />
 
         <div className="flex items-center gap-1 shrink-0">
           {isRunning && firstPort && onOpenLocalPort && (

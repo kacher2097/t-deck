@@ -1,12 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api, formatError } from "../lib/api";
-import { type ProcessChangedEvent, subscribeEvent } from "../lib/events";
-import type {
-  Category,
-  ProjectView,
-  RunningProcess,
-  WebHealthResult,
-} from "../types/project";
+import type { Category, ProjectView } from "../types/project";
+import { useRuntimeEvents } from "./useRuntimeEvents";
 
 interface UseProjectsHubOptions {
   debouncedQuery: string;
@@ -31,17 +26,13 @@ export function useProjectsHub({
   const [categories, setCategories] = useState<Category[]>([]);
 
   const [scanning, setScanning] = useState(false);
+  const [scanRevealTick, setScanRevealTick] = useState(0);
   const [syncing, setSyncing] = useState(false);
-  const [checkingHealth, setCheckingHealth] = useState(false);
   const [deletingProjects, setDeletingProjects] = useState(false);
   const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
   const [busyCardId, setBusyCardId] = useState<string | null>(null);
-  const [healthMap, setHealthMap] = useState<Record<string, WebHealthResult>>(
-    {}
-  );
-  const [runningMap, setRunningMap] = useState<Record<string, RunningProcess>>(
-    {}
-  );
+
+  const runtime = useRuntimeEvents({ notify });
 
   const loadCategories = useCallback(async () => {
     try {
@@ -89,66 +80,15 @@ export function useProjectsHub({
     return () => window.removeEventListener("unhandledrejection", onUnhandled);
   }, [notify]);
 
-  // Subscribe to backend runtime events (web health & process monitor).
-  useEffect(() => {
-    api
-      .listRunningProcesses()
-      .then((list) => {
-        const next: Record<string, RunningProcess> = {};
-        for (const p of list || []) {
-          if (p.pid > 0) next[p.project_id] = p;
-        }
-        setRunningMap(next);
-      })
-      .catch(() => {});
-
-    const unsubHealth = subscribeEvent<WebHealthResult>(
-      "health:result",
-      (res) => {
-        setHealthMap((prev) => ({ ...prev, [res.target_id]: res }));
-      }
-    );
-    const unsubProc = subscribeEvent<ProcessChangedEvent>(
-      "process:changed",
-      (ev) => {
-        setRunningMap((prev) => {
-          const next = { ...prev };
-          if (!ev.running || ev.pid <= 0) {
-            delete next[ev.project_id];
-          } else {
-            next[ev.project_id] = {
-              project_id: ev.project_id,
-              pid: ev.pid,
-              ports: ev.ports || [],
-              started_at: prev[ev.project_id]?.started_at || Date.now(),
-              command: prev[ev.project_id]?.command || "",
-            };
-          }
-          return next;
-        });
-      }
-    );
-    return () => {
-      unsubHealth();
-      unsubProc();
-    };
-  }, []);
-
-  const runningIds = useMemo(
-    () =>
-      new Set(
-        Object.values(runningMap)
-          .filter((r) => r.pid > 0)
-          .map((r) => r.project_id)
-      ),
-    [runningMap]
-  );
-
   const handleScan = useCallback(async () => {
     setScanning(true);
     try {
-      const rep = await api.scanLocalWorkspaces();
+      const [rep] = await Promise.all([
+        api.scanLocalWorkspaces(),
+        new Promise((resolve) => setTimeout(resolve, 900)),
+      ]);
       await refreshAll();
+      setScanRevealTick((t) => t + 1);
       notify(
         "success",
         `Quét xong ${rep.scanned_dirs} thư mục: +${rep.added} mới, ${rep.relinked} relink, ${rep.updated} cập nhật.`
@@ -194,8 +134,6 @@ export function useProjectsHub({
           await refreshAll();
         } else {
           notify("success", res.message);
-          // Skip unnecessary grid re-fetch on normal LAUNCHED when card is already ready
-          // so the list stays rock-steady with zero layout shift or thumbnail flash.
           if (project.status !== "ready") {
             await refreshAll();
           }
@@ -252,49 +190,6 @@ export function useProjectsHub({
       if (!webTarget) return;
       api
         .openTargetURL(webTarget.id, "prod")
-        .catch((e) => notify("error", formatError(e)));
-    },
-    [notify]
-  );
-
-  const handleCheckAllHealth = useCallback(async () => {
-    setCheckingHealth(true);
-    try {
-      const results = await api.checkAllWebHealth();
-      const map: Record<string, WebHealthResult> = {};
-      let online = 0;
-      for (const r of results || []) {
-        map[r.target_id] = r;
-        if (r.online) online++;
-      }
-      setHealthMap((prev) => ({ ...prev, ...map }));
-      notify(
-        "success",
-        `Kiểm tra xong ${results?.length || 0} Web targets (${online} online).`
-      );
-    } catch (err) {
-      notify("error", formatError(err));
-    } finally {
-      setCheckingHealth(false);
-    }
-  }, [notify]);
-
-  const handleStopProcess = useCallback(
-    async (p: ProjectView) => {
-      try {
-        await api.stopProjectProcess(p.id);
-        notify("success", `Đã dừng tiến trình "${p.name}".`);
-      } catch (err) {
-        notify("error", formatError(err));
-      }
-    },
-    [notify]
-  );
-
-  const handleOpenLocalPort = useCallback(
-    (port: number) => {
-      api
-        .openLocalhostPort(port)
         .catch((e) => notify("error", formatError(e)));
     },
     [notify]
@@ -427,14 +322,12 @@ export function useProjectsHub({
     queryMatchedProjects,
     categories,
     scanning,
+    scanRevealTick,
     syncing,
-    checkingHealth,
     deletingProjects,
     lastSyncAt,
     busyCardId,
-    healthMap,
-    runningMap,
-    runningIds,
+    ...runtime,
     loadCategories,
     refreshAll,
     handleScan,
@@ -443,9 +336,6 @@ export function useProjectsHub({
     handleHydrate,
     handleUploadThumbnail,
     handleOpenLive,
-    handleCheckAllHealth,
-    handleStopProcess,
-    handleOpenLocalPort,
     handleUpdateDesktopFromList,
     handleCopyReleaseLink,
     handleOpenExplorer,

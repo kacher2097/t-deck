@@ -146,21 +146,22 @@ type ProjectView struct {
 	ThumbnailUpdatedAt int64    `json:"thumbnail_updated_at"`
 	UpdatedAt          int64    `json:"updated_at"`
 
-	LocalDir         string            `json:"local_dir"`
-	Status           string            `json:"status"`
-	LastOpenedAt     int64             `json:"last_opened_at"`
-	HasEnv           bool              `json:"has_env"`
-	HasEnvExample    bool              `json:"has_env_example"`
-	HasBat           bool              `json:"has_bat"`
-	ThumbnailURL     string            `json:"thumbnail_url"`
-	InstalledVersion string            `json:"installed_version"`
-	GitBranch        string            `json:"git_branch"`
-	GitCommit        string            `json:"git_commit"`
-	GitDirty         bool              `json:"git_dirty"`
-	Targets          []ProjectTarget   `json:"targets"`
+	LocalDir         string             `json:"local_dir"`
+	Status           string             `json:"status"`
+	LastOpenedAt     int64              `json:"last_opened_at"`
+	HasEnv           bool               `json:"has_env"`
+	HasEnvExample    bool               `json:"has_env_example"`
+	HasBat           bool               `json:"has_bat"`
+	ThumbnailURL     string             `json:"thumbnail_url"`
+	IconURL          string             `json:"icon_url,omitempty"`
+	InstalledVersion string             `json:"installed_version"`
+	GitBranch        string             `json:"git_branch"`
+	GitCommit        string             `json:"git_commit"`
+	GitDirty         bool               `json:"git_dirty"`
+	Targets          []ProjectTarget    `json:"targets"`
 	LatestReleases   map[string]Release `json:"latest_releases"`
-	HasUpdate        bool              `json:"has_update"`
-	LiveURL          string            `json:"live_url"`
+	HasUpdate        bool               `json:"has_update"`
+	LiveURL          string             `json:"live_url"`
 }
 
 // ProjectFilter defines search and sidebar filter parameters.

@@ -22,9 +22,9 @@ const (
 	ReleasesPrefix    = "releases/"
 	DefaultBucketName = "my-storage"
 
-	MaxScanDepth          = 3
-	MaxReadmeSummaryLen   = 500
-	DefaultScanRecentDays = 120
+	MaxScanDepth           = 4
+	MaxReadmeSummaryLen    = 500
+	DefaultScanRecentDays  = 120
 	TombstoneRetentionDays = 90
 	ManifestFileName       = ".tdeck.json"
 )
@@ -92,6 +92,7 @@ var IgnoredDirs = []string{
 	"venv",
 	".graphify-venv",
 	"__pycache__",
+	"__macosx",
 	"dist",
 	"build",
 	".next",
@@ -102,7 +103,10 @@ var IgnoredDirs = []string{
 	".runtime",
 	".tmp",
 	".superpowers",
+	".pnpm-store",
 	"$recycle.bin",
+	"$mfedeeprem",
+	"$windows.~tmp",
 	"system volume information",
 	"recovery",
 	"config.msi",
@@ -112,6 +116,35 @@ var IgnoredDirs = []string{
 	"program files (x86)",
 	"windows",
 	"msocache",
+	"agent-runtime",
+	"agent-skills-master",
+	"model_ai",
+	"postgresql",
+	"mongodb",
+	"mysql",
+	"laragon",
+	"xampp",
+	"netsarang",
+	"tableplus",
+	"dbeaver",
+	"hibit uninstaller",
+	"antigravity ide",
+	"cursor",
+	"jetbrains",
+	"obs-studio",
+	"openvpn",
+	"softether vpn client",
+	"steam",
+	"riot games",
+	"half life",
+	"treesize",
+	"nvm4w",
+	"locales",
+	"resources",
+	"runtimes",
+	"jre",
+	"inspection",
+	"extracted",
 }
 
 // ProjectMarkerFiles identify a directory as a managed or discoverable project.

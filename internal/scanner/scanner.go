@@ -119,7 +119,7 @@ func (s *Scanner) ScanWithOptions(opts ScanOptions) (model.ScanReport, error) {
 		wg.Wait()
 	}
 
-	s.markMissingProjects(existingStates, seenProjectIDs, &report)
+	s.markMissingProjects(existingStates, seenProjectIDs, appsRootNorm, excludeSet, &report)
 	return report, nil
 }
 
@@ -153,7 +153,22 @@ func (s *Scanner) walkRoot(
 	s.mu.Unlock()
 
 	if depth > 0 {
-		if handled := s.inspectDir(dir, isAppsRoot, cutoff, existingStates, seenIDs, report); handled {
+		if !isAppsRoot && isInstalledAppOrSDKDir(dir) {
+			s.cleanupBogusMeta(dir)
+			return
+		}
+		if !isAppsRoot && isGenericSubdirProjectName(dir) {
+			s.cleanupBogusMeta(dir)
+			return
+		}
+		if !isAppsRoot {
+			if isContainer, _ := inspectWorkspaceContainer(dir); isContainer {
+				s.cleanupBogusMeta(dir)
+				// Fall through to descend into child projects instead of treating container as one project.
+			} else if handled := s.inspectDir(dir, isAppsRoot, cutoff, existingStates, seenIDs, report); handled {
+				return
+			}
+		} else if handled := s.inspectDir(dir, isAppsRoot, cutoff, existingStates, seenIDs, report); handled {
 			return
 		}
 	}
@@ -170,15 +185,21 @@ func (s *Scanner) walkRoot(
 		return
 	}
 
+	_, hasStrayRootPkg := inspectWorkspaceContainer(dir)
+
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
 		}
 		name := entry.Name()
-		if isIgnoredDir(name) || isExtraExcluded(name, filepath.Join(dir, name), excludeSet) {
+		subPath := filepath.Join(dir, name)
+		if isIgnoredDir(name) || isExtraExcluded(name, subPath, excludeSet) {
 			continue
 		}
-		s.walkRoot(filepath.Join(dir, name), depth+1, isAppsRoot, cutoff, excludeSet, rootSet, existingStates, seenIDs, visitedDirs, report)
+		if hasStrayRootPkg && isStrayContainerSubdir(name) && !fsutil.DirExists(filepath.Join(subPath, ".git")) {
+			continue
+		}
+		s.walkRoot(subPath, depth+1, isAppsRoot, cutoff, excludeSet, rootSet, existingStates, seenIDs, visitedDirs, report)
 	}
 }
 
@@ -198,6 +219,11 @@ func (s *Scanner) inspectDir(
 			report.Errors = append(report.Errors, fmt.Sprintf("invalid meta in %s: %v", dir, err))
 			s.mu.Unlock()
 		} else {
+			detected, _ := detectProjectMarkers(dir, isAppsRoot)
+			if !detected && !fsutil.FileExists(filepath.Join(dir, config.ManifestFileName)) {
+				s.cleanupBogusMeta(dir)
+				return false
+			}
 			if !cutoff.IsZero() && !isProjectModifiedSince(dir, cutoff) {
 				return true
 			}
@@ -236,7 +262,7 @@ func (s *Scanner) inspectDir(
 		Slug:      slug,
 		Name:      folderName,
 		Type:      info.projectType,
-		Summary:   extractReadmeSummary(dir),
+		Summary:   ExtractSummary(dir),
 		Tags:      inferTags(info.techStack, info.projectType),
 		TechStack: info.techStack,
 		GitRemote: parseGitRemote(dir),
@@ -333,7 +359,7 @@ func (s *Scanner) handleExistingMeta(dir string, meta model.ProjectMeta, isAppsR
 		Slug:      slug,
 		Name:      folderName,
 		Type:      pType,
-		Summary:   extractReadmeSummary(dir),
+		Summary:   ExtractSummary(dir),
 		Tags:      inferTags(markerInfo.techStack, pType),
 		TechStack: markerInfo.techStack,
 		GitRemote: parseGitRemote(dir),
@@ -403,7 +429,7 @@ func (s *Scanner) relinkExistingProject(dir string, existing model.Project, isAp
 		}
 	}
 	if existing.Summary == "" {
-		if sum := extractReadmeSummary(dir); sum != "" {
+		if sum := ExtractSummary(dir); sum != "" {
 			existing.Summary = sum
 			needsUpdate = true
 		}
@@ -498,7 +524,13 @@ func ApplyProjectManifestToStore(store any, projectID string, manifest *ProjectM
 	return nil
 }
 
-func (s *Scanner) markMissingProjects(states map[string]model.LocalState, seenIDs map[string]struct{}, report *model.ScanReport) {
+func (s *Scanner) markMissingProjects(
+	states map[string]model.LocalState,
+	seenIDs map[string]struct{},
+	appsRootNorm string,
+	excludeSet map[string]struct{},
+	report *model.ScanReport,
+) {
 	for pid, st := range states {
 		if _, ok := seenIDs[pid]; ok {
 			continue
@@ -510,8 +542,131 @@ func (s *Scanner) markMissingProjects(states map[string]model.LocalState, seenID
 			if err := s.repo.UpdateLocalStatus(pid, config.StatusMissingDir); err == nil {
 				report.Missing++
 			}
+			continue
+		}
+		if isFalsePositiveLocalDir(st.LocalDir, appsRootNorm, excludeSet) {
+			_ = os.Remove(filepath.Join(st.LocalDir, config.MetaFileName))
+			s.purgeFalsePositive(pid)
 		}
 	}
+}
+
+func (s *Scanner) cleanupBogusMeta(dir string) {
+	metaPath := filepath.Join(dir, config.MetaFileName)
+	if !fsutil.FileExists(metaPath) {
+		return
+	}
+	if meta, err := ReadMetaFile(dir); err == nil && strings.TrimSpace(meta.ProjectID) != "" {
+		s.purgeFalsePositive(meta.ProjectID)
+	}
+	_ = os.Remove(metaPath)
+}
+
+func (s *Scanner) purgeFalsePositive(projectID string) {
+	if purger, ok := s.repo.(interface {
+		PurgeFalsePositiveProject(id string) error
+	}); ok {
+		s.mu.Lock()
+		_ = purger.PurgeFalsePositiveProject(projectID)
+		s.mu.Unlock()
+	}
+}
+
+func inspectWorkspaceContainer(dir string) (isContainer bool, hasStrayPkg bool) {
+	if fsutil.DirExists(filepath.Join(dir, ".git")) {
+		return false, false
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false, false
+	}
+	rootPkgName := ""
+	if pkg := readRootPackageJSON(dir); pkg != nil {
+		if n, ok := pkg["name"].(string); ok {
+			rootPkgName = strings.TrimSpace(n)
+		}
+	}
+	gitChildren := 0
+	hasDuplicateChild := false
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if isIgnoredDir(name) || isNestedStackSubdir(name) {
+			continue
+		}
+		subDir := filepath.Join(dir, name)
+		hasGit := fsutil.DirExists(filepath.Join(subDir, ".git"))
+		if hasGit {
+			gitChildren++
+		}
+		if rootPkgName != "" && strings.EqualFold(name, rootPkgName) &&
+			(hasGit || fsutil.FileExists(filepath.Join(subDir, "package.json"))) {
+			hasDuplicateChild = true
+		}
+	}
+	return gitChildren >= 4 || hasDuplicateChild, hasDuplicateChild && rootPkgName != ""
+}
+
+func isStrayContainerSubdir(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "backend", "src", "public", "dist", "data", "scripts", "node_modules":
+		return true
+	}
+	return false
+}
+
+func isGenericSubdirProjectName(dir string) bool {
+	if fsutil.DirExists(filepath.Join(dir, ".git")) || fsutil.FileExists(filepath.Join(dir, config.ManifestFileName)) {
+		return false
+	}
+	switch strings.ToLower(filepath.Base(dir)) {
+	case "src", "lib", "docs", "assets", "templates", "scripts", "test", "tests",
+		"examples", "samples", "fixtures", "companion-extension", "nested-extension":
+		return true
+	}
+	return false
+}
+
+func isFalsePositiveLocalDir(dir string, appsRootNorm string, excludeSet map[string]struct{}) bool {
+	cleaned := filepath.Clean(dir)
+	norm := strings.ToLower(cleaned)
+	isUnderApps := appsRootNorm != "" && strings.HasPrefix(norm, appsRootNorm+string(filepath.Separator))
+
+	// Check every path segment against IgnoredDirs / extra exclusions.
+	relCheck := cleaned
+	for len(relCheck) > len(filepath.VolumeName(relCheck))+1 {
+		base := filepath.Base(relCheck)
+		if isIgnoredDir(base) || isExtraExcluded(base, relCheck, excludeSet) {
+			return true
+		}
+		parent := filepath.Dir(relCheck)
+		if parent == relCheck {
+			break
+		}
+		relCheck = parent
+	}
+
+	if !isUnderApps {
+		if isInstalledAppOrSDKDir(cleaned) || isGenericSubdirProjectName(cleaned) {
+			return true
+		}
+		if isContainer, _ := inspectWorkspaceContainer(cleaned); isContainer {
+			return true
+		}
+		parent := filepath.Dir(cleaned)
+		if parent != cleaned {
+			if _, hasStrayPkg := inspectWorkspaceContainer(parent); hasStrayPkg &&
+				isStrayContainerSubdir(filepath.Base(cleaned)) &&
+				!fsutil.DirExists(filepath.Join(cleaned, ".git")) {
+				return true
+			}
+		}
+	}
+
+	detected, _ := detectProjectMarkers(cleaned, isUnderApps)
+	return !detected && !fsutil.FileExists(filepath.Join(cleaned, config.ManifestFileName))
 }
 
 func (s *Scanner) uniqueSlug(base string, excludeID string) string {
@@ -589,6 +744,9 @@ func isProjectModifiedSince(root string, cutoff time.Time) bool {
 			if path != root && isIgnoredDir(d.Name()) {
 				return filepath.SkipDir
 			}
+			return nil
+		}
+		if strings.EqualFold(d.Name(), config.MetaFileName) {
 			return nil
 		}
 		if info, err := d.Info(); err == nil && !info.ModTime().Before(cutoff) {

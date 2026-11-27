@@ -148,3 +148,86 @@ export function applyFacets(
     }
   });
 }
+
+export interface SidebarCounts {
+  total: number;
+  categoryMap: Map<string, number>;
+  uncategorized: number;
+  web: number;
+  desktop: number;
+  hybrid: number;
+  ready: number;
+  cloudOnly: number;
+  missingEnv: number;
+  missingDir: number;
+  sortedTags: [string, number][];
+}
+
+export function computeSidebarCounts(
+  projects: ProjectView[],
+  selectedTag: string
+): SidebarCounts {
+  const categoryMap = new Map<string, number>();
+  const tagMap = new Map<string, number>();
+  let uncategorized = 0;
+  let web = 0;
+  let desktop = 0;
+  let hybrid = 0;
+  let ready = 0;
+  let cloudOnly = 0;
+  let missingEnv = 0;
+  let missingDir = 0;
+
+  for (const p of projects) {
+    const c = (p.category || "").trim();
+    if (!c) {
+      uncategorized++;
+    } else {
+      const k = c.toLowerCase();
+      categoryMap.set(k, (categoryMap.get(k) || 0) + 1);
+    }
+
+    if (p.type === "web") web++;
+    else if (p.type === "desktop") desktop++;
+    else if (p.type === "hybrid") hybrid++;
+
+    if (p.status === "ready") ready++;
+    else if (p.status === "cloud_only") cloudOnly++;
+    else if (p.status === "missing_env") missingEnv++;
+    else if (p.status === "missing_dir") missingDir++;
+
+    for (const t of p.tags || []) {
+      const clean = t.trim();
+      if (!clean) continue;
+      tagMap.set(clean, (tagMap.get(clean) || 0) + 1);
+    }
+  }
+
+  if (
+    selectedTag &&
+    !Array.from(tagMap.keys()).some(
+      (t) => t.toLowerCase() === selectedTag.toLowerCase()
+    )
+  ) {
+    tagMap.set(selectedTag, 0);
+  }
+
+  const sortedTags = Array.from(tagMap.entries()).sort((a, b) => {
+    if (b[1] !== a[1]) return b[1] - a[1];
+    return a[0].localeCompare(b[0]);
+  });
+
+  return {
+    total: projects.length,
+    categoryMap,
+    uncategorized,
+    web,
+    desktop,
+    hybrid,
+    ready,
+    cloudOnly,
+    missingEnv,
+    missingDir,
+    sortedTags,
+  };
+}

@@ -97,6 +97,7 @@ export interface ProjectView {
   has_env_example: boolean;
   has_bat: boolean;
   thumbnail_url: string;
+  icon_url?: string;
   installed_version: string;
   git_branch: string;
   git_commit: string;

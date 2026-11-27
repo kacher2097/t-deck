@@ -5,46 +5,82 @@
 settings.json
 settings.json.*
 
-# T-Deck local runtime state, anchor & databases
+# T-Deck local runtime state, identity anchor, staging & databases
 .tdeck-data/
 .tdeck-meta.json
 thumbnails/
+staging/
+backups/
+*.__bak/
+*._bak/
 *.db
 *.db-wal
 *.db-shm
 *.sqlite
 *.sqlite3
 
+# Mock & test files
+*_test.go
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+__tests__/
+__mocks__/
+testdata/
+coverage/
+coverage.*
+*.test
+*.out
+
 # Wails & Go build artifacts
 build/bin/
 build/windows/installer/*.exe
 frontend/package.json.md5
 frontend/wailsjs/
+vendor/
+tmp/
+temp/
 *.exe
 *.dll
 *.so
 *.dylib
-*.test
-*.out
 *.syso
-coverage.*
 
 # Frontend / Node / Vite
 node_modules/
+frontend/node_modules/
 frontend/dist/
 frontend/dist-ssr/
 .vite/
+frontend/.vite/
 *.tsbuildinfo
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Editor, AI workspace & OS artifacts
+# AI Agents, Editor, IDE & OS artifacts (unrelated to project source)
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+.agents/
+.claude/
+.cursor/
+.cursorrules
+.windsurf/
+.windsurfrules
 .gemini/
 .codegraph/
+.aider*
+.copilot/
 .vscode/
 .idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
 *.swp
 *.swo
 *~
@@ -55,3 +91,4 @@ pnpm-debug.log*
 .DS_Store
 Thumbs.db
 desktop.ini
+$RECYCLE.BIN/

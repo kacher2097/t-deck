@@ -611,6 +611,39 @@ func (r *ProjectRepo) SoftDeleteProjectAt(id string, deletedAt int64) error {
 	return nil
 }
 
+// PurgeFalsePositiveProject permanently removes an auto-discovered false-positive project without leaving a tombstone.
+func (r *ProjectRepo) PurgeFalsePositiveProject(id string) error {
+	if strings.TrimSpace(id) == "" {
+		return nil
+	}
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(`DELETE FROM projects_fts WHERE project_id = ?`, id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM local_state WHERE project_id = ?`, id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM project_targets WHERE project_id = ?`, id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM releases WHERE project_id = ?`, id); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM projects WHERE id = ?`, id); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	r.MarkThumbnailExists(id, false)
+	return nil
+}
+
 // PurgeExpiredTombstones permanently removes soft-deleted rows older than cutoffUnix.
 func (r *ProjectRepo) PurgeExpiredTombstones(cutoffUnix int64) error {
 	tx, err := r.db.Begin()
@@ -726,6 +759,9 @@ func (r *ProjectRepo) scanProjectRowWithFlags(row rowScanner, refreshLiveFlags b
 	}
 	if r.hasThumbnailCached(v.ID) {
 		v.ThumbnailURL = fmt.Sprintf("/thumbnails/%s.png?v=%d", v.ID, v.ThumbnailUpdatedAt)
+	}
+	if r.hasThumbnailCached(v.ID + ".icon") {
+		v.IconURL = fmt.Sprintf("/thumbnails/%s.icon.png?v=%d", v.ID, v.ThumbnailUpdatedAt)
 	}
 	return v, flagsCheckedAt, nil
 }

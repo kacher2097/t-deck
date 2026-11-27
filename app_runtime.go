@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -14,6 +15,7 @@ import (
 	"t-deck/internal/apperr"
 	"t-deck/internal/cloud"
 	"t-deck/internal/launcher"
+	"t-deck/internal/media"
 	"t-deck/internal/model"
 	"t-deck/internal/scanner"
 )
@@ -29,12 +31,49 @@ func (a *App) ScanLocalWorkspaces() (rep model.ScanReport, err error) {
 	if err != nil {
 		return model.ScanReport{}, err
 	}
-	return a.scanner.ScanWithOptions(scanner.ScanOptions{
+	rep, err = a.scanner.ScanWithOptions(scanner.ScanOptions{
 		WorkspaceDirs:    settings.WorkspaceDirs,
 		AppsDir:          settings.AppsDir,
 		RecentDays:       settings.ScanRecentDays,
 		ExtraExcludeDirs: settings.ScanExcludeDirs,
 	})
+	if err == nil {
+		a.generateMissingThumbnails()
+	}
+	return rep, err
+}
+
+func (a *App) generateMissingThumbnails() {
+	if a.repo == nil || a.thumbs == nil {
+		return
+	}
+	views, listErr := a.repo.ListProjects(model.ProjectFilter{})
+	if listErr != nil {
+		return
+	}
+	var ids []string
+	for _, v := range views {
+		if v.ThumbnailURL == "" || (v.IconURL == "" && v.LocalDir != "" && media.HasProjectBrandLogo(v.LocalDir)) {
+			ids = append(ids, v.ID)
+		}
+	}
+	if len(ids) == 0 {
+		return
+	}
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 6)
+	for _, id := range ids {
+		id := id
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			_, _ = a.thumbs.GenerateProjectThumbnail(id)
+		}()
+	}
+	wg.Wait()
+	a.repo.InvalidateThumbnailCache()
 }
 
 func (a *App) SaveClipboardThumbnail(projectID string, base64PNG string) (string, error) {

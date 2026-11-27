@@ -17,11 +17,12 @@ func main() {
 	app := NewApp()
 
 	err := wails.Run(&options.App{
-		Title:     "T-Deck",
-		Width:     1440,
-		Height:    900,
-		MinWidth:  1080,
-		MinHeight: 720,
+		Title:            "T-Deck",
+		Width:            1280,
+		Height:           760,
+		MinWidth:         960,
+		MinHeight:        620,
+		WindowStartState: options.Maximised,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 			Middleware: func(next http.Handler) http.Handler {

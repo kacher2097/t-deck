@@ -138,8 +138,14 @@ func DefaultSummaryForProject(p model.Project) string {
 }
 
 // RenderProjectThumbnailPNG synthesizes a 2x2 supersampled (1920x1080 -> 960x540) Dark Industrial poster PNG.
-// Using thick Segoe UI Bold stems and 4x box-filtered supersampling eliminates subpixel breakup on compact cards.
 func RenderProjectThumbnailPNG(p model.Project) ([]byte, error) {
+	return RenderProjectThumbnailPNGWithLogo(p, nil)
+}
+
+// RenderProjectThumbnailPNGWithLogo synthesizes a 2x2 supersampled (1920x1080 -> 960x540) poster PNG.
+// When brandLogo is non-nil, the project's brand icon is rendered in the left brand header lockup and right hero emblem showcase.
+// When brandLogo is nil, the output is 100% identical to the standard schematic poster.
+func RenderProjectThumbnailPNGWithLogo(p model.Project, brandLogo image.Image) ([]byte, error) {
 	loadSystemFonts()
 
 	hi := image.NewRGBA(image.Rect(0, 0, canvasW, canvasH))
@@ -181,11 +187,25 @@ func RenderProjectThumbnailPNG(p model.Project) ([]byte, error) {
 	maxLeftW := 968
 
 	eyebrowText := strings.ToUpper(domainDisplayName(domain))
-	drawString(hi, leftX, 240, eyebrowText, faceEyebrow, palette.primary)
+	if brandLogo != nil {
+		// Left brand lockup: 120x120 rounded icon frame beside the domain eyebrow & verified brand pill.
+		iconBoxX, iconBoxY, iconBoxSize := leftX, 142, 124
+		fillRoundedRectAA(hi, iconBoxX, iconBoxY, iconBoxSize, iconBoxSize, 26, bgElevated)
+		blitRoundedIconAA(hi, brandLogo, iconBoxX+8, iconBoxY+8, iconBoxSize-16, iconBoxSize-16, 20)
+		strokeRoundedRectAA(hi, iconBoxX, iconBoxY, iconBoxSize, iconBoxSize, 26, 4, palette.softBorder)
+
+		drawString(hi, leftX+150, 204, eyebrowText, faceEyebrow, palette.primary)
+		drawPillAA(hi, leftX+150, 222, 236, 52, 12, "APP ICON", faceBadge, palette.badgeBg, palette.softBorder, palette.primary)
+	} else {
+		drawString(hi, leftX, 240, eyebrowText, faceEyebrow, palette.primary)
+	}
 
 	// Hero project title (up to 2 lines).
 	titleLines := wrapTitleText(cleanTitle, faceTitle, maxLeftW, 2)
 	titleY := 378
+	if brandLogo != nil {
+		titleY = 392
+	}
 	for _, line := range titleLines {
 		drawString(hi, leftX, titleY, line, faceTitle, textPrimary)
 		titleY += titleLineH
@@ -238,6 +258,21 @@ func RenderProjectThumbnailPNG(p model.Project) ([]byte, error) {
 		panelX+36, panelY+96, panelW-72, panelH-132,
 		palette, bgSurface, bgElevated, borderEdge,
 	)
+
+	if brandLogo != nil {
+		// Hero brand emblem showcase centered inside the right preview panel.
+		cx := panelX + panelW/2
+		cy := panelY + 62 + (panelH-62)/2
+		fillCircleAA(hi, float64(cx), float64(cy), 192, palette.badgeBg)
+		strokeCircleAA(hi, float64(cx), float64(cy), 192, 4, palette.softBorder)
+
+		cardSize := 288
+		cardX := cx - cardSize/2
+		cardY := cy - cardSize/2
+		fillRoundedRectAA(hi, cardX, cardY, cardSize, cardSize, 52, bgSurface)
+		blitRoundedIconAA(hi, brandLogo, cardX+24, cardY+24, cardSize-48, cardSize-48, 38)
+		strokeRoundedRectAA(hi, cardX, cardY, cardSize, cardSize, 52, 5, palette.primary)
+	}
 
 	// Downsample 2x2 (1920x1080 -> 960x540) with exact 4-pixel box averaging for smooth anti-aliased edges.
 	out := downsample2x(hi)

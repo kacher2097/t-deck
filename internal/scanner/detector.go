@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,7 +31,110 @@ var nestedStackSubdirs = []string{
 	"src-tauri",
 }
 
+func isNestedStackSubdir(name string) bool {
+	lower := strings.ToLower(strings.TrimSpace(name))
+	for _, sub := range nestedStackSubdirs {
+		if lower == sub {
+			return true
+		}
+	}
+	return false
+}
+
+// isInstalledAppOrSDKDir detects pre-built third-party application install folders or SDK roots
+// (Electron/NSIS/InnoSetup installers, Eclipse/DBeaver, Go SDK, Flutter SDK) so they are not
+// misclassified as user source-code projects outside dedicated AppsDir.
+func isInstalledAppOrSDKDir(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+	hasRootCodeAnchor := false
+	hasChromiumPackaged := false
+	hasUninstaller := false
+	hasEclipse := false
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		lower := strings.ToLower(entry.Name())
+		switch lower {
+		case "package.json", "wails.json", "go.mod", "cargo.toml", "pom.xml", "pyproject.toml":
+			hasRootCodeAnchor = true
+		case "chrome_100_percent.pak", "licenses.chromium.html", "icudtl.dat":
+			hasChromiumPackaged = true
+		case ".eclipseproduct":
+			hasEclipse = true
+		}
+		if (strings.HasPrefix(lower, "unins") || strings.HasPrefix(lower, "uninstall")) && strings.HasSuffix(lower, ".exe") {
+			hasUninstaller = true
+		}
+	}
+
+	if hasRootCodeAnchor {
+		return false
+	}
+	if hasUninstaller || hasChromiumPackaged || hasEclipse {
+		return true
+	}
+	// Go SDK distribution root
+	if fsutil.FileExists(filepath.Join(dir, "bin", "go.exe")) && fsutil.DirExists(filepath.Join(dir, "src", "runtime")) {
+		return true
+	}
+	// Flutter SDK distribution root
+	if fsutil.FileExists(filepath.Join(dir, "bin", "flutter.bat")) && fsutil.DirExists(filepath.Join(dir, "packages", "flutter_tools")) {
+		return true
+	}
+	return false
+}
+
+func isChromeExtensionManifest(path string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	var obj map[string]any
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return false
+	}
+	_, ok := obj["manifest_version"]
+	return ok
+}
+
+func hasCodeMarkerInDir(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		lower := strings.ToLower(entry.Name())
+		switch lower {
+		case "package.json", "go.mod", "pom.xml", "requirements.txt", "pyproject.toml",
+			"cargo.toml", "composer.json", "gradlew.bat", "build.gradle", "build.gradle.kts",
+			"pubspec.yaml", "tauri.conf.json", strings.ToLower(config.WailsConfig),
+			strings.ToLower(config.ManifestFileName):
+			return true
+		case "manifest.json":
+			if isChromeExtensionManifest(filepath.Join(dir, entry.Name())) {
+				return true
+			}
+		}
+		if strings.HasSuffix(lower, ".csproj") || strings.HasSuffix(lower, ".sln") {
+			return true
+		}
+	}
+	return false
+}
+
 func detectProjectMarkers(dir string, isAppsRoot bool) (bool, markerDetection) {
+	if !isAppsRoot && isInstalledAppOrSDKDir(dir) {
+		return false, markerDetection{}
+	}
+
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return false, markerDetection{}
@@ -39,7 +143,8 @@ func detectProjectMarkers(dir string, isAppsRoot bool) (bool, markerDetection) {
 	var (
 		hasPackageJSON, hasGoMod, hasPomXML, hasRequirements, hasPyProject bool
 		hasCargo, hasComposer, hasWails, hasStartBat, hasGradle           bool
-		hasPubspec, hasDocker, hasTauri                                   bool
+		hasPubspec, hasDocker, hasTauri, hasManifestFile, hasChromeExt    bool
+		hasSolution                                                       bool
 		csprojFile                                                        string
 		firstBat, firstExe                                                string
 	)
@@ -75,12 +180,21 @@ func detectProjectMarkers(dir string, isAppsRoot bool) (bool, markerDetection) {
 			hasTauri = true
 		case strings.ToLower(config.WailsConfig):
 			hasWails = true
+		case strings.ToLower(config.ManifestFileName):
+			hasManifestFile = true
+		case "manifest.json":
+			if isChromeExtensionManifest(filepath.Join(dir, name)) {
+				hasChromeExt = true
+			}
 		case strings.ToLower(config.DefaultBatFile):
 			hasStartBat = true
 			firstBat = name
 		}
 		if strings.HasSuffix(lower, ".csproj") && csprojFile == "" {
 			csprojFile = name
+		}
+		if strings.HasSuffix(lower, ".sln") {
+			hasSolution = true
 		}
 		if strings.HasSuffix(lower, ".bat") && lower != "gradlew.bat" && firstBat == "" {
 			firstBat = name
@@ -94,10 +208,22 @@ func detectProjectMarkers(dir string, isAppsRoot bool) (bool, markerDetection) {
 		hasTauri = true
 	}
 
+	hasNestedCodeMarker := false
+	for _, sub := range nestedStackSubdirs {
+		subDir := filepath.Join(dir, sub)
+		if fsutil.DirExists(subDir) && hasCodeMarkerInDir(subDir) {
+			hasNestedCodeMarker = true
+			break
+		}
+	}
+
 	hasCodeMarker := hasPackageJSON || hasGoMod || hasPomXML || hasRequirements || hasPyProject ||
-		hasCargo || hasComposer || hasGradle || hasWails || hasStartBat || hasPubspec ||
-		hasTauri || csprojFile != "" || firstBat != ""
-	hasAnyMarker := hasCodeMarker || firstExe != ""
+		hasCargo || hasComposer || hasGradle || hasWails || hasPubspec ||
+		hasTauri || hasManifestFile || hasChromeExt || csprojFile != "" || hasSolution || hasNestedCodeMarker
+	hasAnyMarker := hasCodeMarker
+	if isAppsRoot {
+		hasAnyMarker = hasAnyMarker || hasStartBat || firstBat != "" || firstExe != ""
+	}
 	if !hasAnyMarker {
 		return false, markerDetection{}
 	}
@@ -147,6 +273,9 @@ func detectProjectMarkers(dir string, isAppsRoot bool) (bool, markerDetection) {
 	}
 	if hasComposer {
 		stacks = append(stacks, "PHP")
+	}
+	if hasChromeExt {
+		stacks = append(stacks, "Chrome Extension")
 	}
 	if hasPubspec {
 		stacks = append(stacks, detectFlutterStack(filepath.Join(dir, "pubspec.yaml"))...)
@@ -205,6 +334,12 @@ func detectProjectMarkers(dir string, isAppsRoot bool) (bool, markerDetection) {
 			stacks = append(stacks, rustStacks...)
 			if tauriCargo {
 				isTauriDesktop = true
+			}
+		}
+		for _, gf := range []string{"build.gradle", "build.gradle.kts"} {
+			if fsutil.FileExists(filepath.Join(subDir, gf)) {
+				stacks = append(stacks, detectGradleStack(subDir)...)
+				break
 			}
 		}
 	}
