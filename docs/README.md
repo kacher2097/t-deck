@@ -21,16 +21,11 @@ Tài liệu trong thư mục này cùng các file `.md` ở thư mục gốc cun
 
 ---
 
-## 2. Tài liệu Kiến trúc & Đặc tả Kỹ thuật (Engineering Specs)
+## 2. Tài liệu Kiến trúc & Lộ trình Phát triển
 
 | Tài liệu | Mục đích | Đối tượng đọc |
 |---|---|---|
 | **[ARCHITECTURE.md](file:///d:/app/t-deck/docs/ARCHITECTURE.md)** | Kiến trúc tổng thể, bản đồ module Go & React, sơ đồ luồng dữ liệu và các quyết định kiến trúc cốt lõi (ADRs) | Tech Lead, Backend/Frontend Dev |
-| **[PLAN.md](file:///d:/app/t-deck/docs/PLAN.md)** | Kế hoạch thực thi tổng thể (Master Plan), bảng 22 tickets (`P1-01`..`P3-07`), đồ thị phụ thuộc và cổng kiểm chứng | Người điều phối, Reviewer, Dev |
-| **[specs/01-performance-and-sync.md](file:///d:/app/t-deck/docs/specs/01-performance-and-sync.md)** | Đặc tả Phase 1: Loại bỏ N+1 disk I/O, tối ưu `Scanner`, SQLite/HTTP cache, nén ảnh clipboard, sync `categories` và soft-delete tombstones | Backend Go & React Dev |
-| **[specs/02-hybrid-release-manager.md](file:///d:/app/t-deck/docs/specs/02-hybrid-release-manager.md)** | Đặc tả Phase 2: Mô hình Hybrid (`project_targets` + `releases`), Web Release Center, Health/Version check, Desktop Update/Rollback nguyên tử & Presigned URLs | Fullstack Wails Dev |
-| **[specs/03-automation-and-dashboard.md](file:///d:/app/t-deck/docs/specs/03-automation-and-dashboard.md)** | Đặc tả Phase 3: Manifest `.tdeck.json`, Multipart R2 upload + progress events, Build & Auto-Changelog drawer, `latest.json` Auto-Updater, Process/Port Monitor & Release Matrix View | Fullstack Wails Dev |
-| **[specs/04-data-and-api-contracts.md](file:///d:/app/t-deck/docs/specs/04-data-and-api-contracts.md)** | Hợp đồng chuẩn về SQLite Schema & Migrations (`v1`→`v3`), cấu trúc object trên R2, schema `.tdeck.json`, danh sách Wails IPC methods & Runtime Events | Toàn bộ thành viên thực thi |
 
 ---
 

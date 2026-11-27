@@ -247,7 +247,7 @@ Toàn bộ tài liệu mở rộng của dự án được tổ chức chi tiế
 | **[docs/CONFIGURATION.md](file:///d:/app/t-deck/docs/CONFIGURATION.md)** | Đặc tả cấu hình hệ thống (`settings.json`, `.env`), chuẩn file neo `.tdeck-meta.json`, chuẩn manifest `.tdeck.json` và cấu trúc lưu trữ trên Cloudflare R2. |
 | **[docs/CLI.md](file:///d:/app/t-deck/docs/CLI.md)** | Hướng dẫn sử dụng công cụ dòng lệnh `tdeck-sync` và script đóng gói `build.bat` cho tự động hóa & CI/CD. |
 | **[docs/ARCHITECTURE.md](file:///d:/app/t-deck/docs/ARCHITECTURE.md)** | Kiến trúc hệ thống, sơ đồ luồng dữ liệu, thiết kế cơ sở dữ liệu SQLite và các quyết định kiến trúc (ADRs). |
-| **[docs/README.md](file:///d:/app/t-deck/docs/README.md)** | Tổng quan tài liệu kỹ thuật và lộ trình phát triển các giai đoạn (`specs/01..04`). |
+| **[docs/README.md](file:///d:/app/t-deck/docs/README.md)** | Tổng quan trung tâm tài liệu kỹ thuật, hướng dẫn sử dụng và lộ trình phát triển các giai đoạn |
 | **[CONTRIBUTING.md](file:///d:/app/t-deck/CONTRIBUTING.md)** | Quy chuẩn mã nguồn Go & React/TypeScript, quy trình kiểm thử (`go test`, `-race`, `tsc`) và hướng dẫn đóng góp. |
 | **[SECURITY.md](file:///d:/app/t-deck/SECURITY.md)** | Chính sách bảo mật, cơ chế cô lập khóa bí mật R2, chống lỗ hổng Zip-Slip và kiểm tra toàn vẹn `SHA-256`. |
 | **[CHANGELOG.md](file:///d:/app/t-deck/CHANGELOG.md)** | Nhật ký thay đổi và lịch sử các phiên bản của T-Deck. |
